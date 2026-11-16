@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { formatTime, DAYS } from "@/lib/utilities/format";
@@ -9,16 +9,8 @@ export const metadata: Metadata = { title: "My Timetable" };
 
 export default async function TeacherTimetablePage() {
   await requireRole("teacher");
-  const supabase = await createClient();
-
-  const { data: slots, error } = await supabase
-    .from("timetable")
-    .select("id, day_of_week, start_time, end_time, room, batches(name), subjects(name)")
-    .eq("is_active", true)
-    .order("day_of_week")
-    .order("start_time");
-
-  if (error) throw error;
+  type Slot = { id: string; day_of_week: number; start_time: string; end_time: string; room: string | null; batches: { name: string } | null; subjects: { name: string } | null };
+  const slots = await api<Slot[]>("/timetable/mine");
 
   return (
     <>

@@ -1,56 +1,40 @@
 import type { Metadata } from "next";
 import { FileText } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { FilterBar, SearchInput, SelectFilter } from "@/components/shared/filters";
 import { UploadMaterialDialog } from "@/features/materials/upload-dialog";
 import { MaterialDownloadButton, DeleteMaterialButton } from "@/features/materials/material-actions";
 import { formatDate } from "@/lib/utilities/format";
-import { pageParams, str, likeTerm } from "@/lib/utilities/query";
+import { pageParams, str } from "@/lib/utilities/query";
 
 export const metadata: Metadata = { title: "Study Materials & Notes" };
 
 export default async function AdminMaterialsPage(props: PageProps<"/admin/materials">) {
   await requireRole("admin");
   const sp = await props.searchParams;
-  const { page, pageSize, from, to } = pageParams(sp);
-  const supabase = await createClient();
+  const { page, pageSize } = pageParams(sp);
 
   const selectedClass = str(sp.class);
   const selectedBatch = str(sp.batch);
   const selectedSubject = str(sp.subject);
   const searchQ = str(sp.q);
-
-  let q = supabase
-    .from("study_materials")
-    .select(
-      "id, title, description, file_path, mime_type, size_bytes, visibility, is_active, created_at, classes(id, name), batches(id, name), subjects(id, name), profiles(full_name)",
-      { count: "exact" }
-    )
-    .eq("is_active", true)
-    .order("created_at", { ascending: false })
-    .range(from, to);
-
-  if (searchQ) q = q.ilike("title", likeTerm(searchQ));
-  if (selectedClass) q = q.eq("class_id", selectedClass);
-  if (selectedBatch) q = q.eq("batch_id", selectedBatch);
-  if (selectedSubject) q = q.eq("subject_id", selectedSubject);
-
-  const [
-    { data: materials, count, error },
-    { data: classes },
-    { data: batches },
-    { data: subjects },
-  ] = await Promise.all([
-    q,
-    supabase.from("classes").select("id, name").eq("status", "active").order("name"),
-    supabase.from("batches").select("id, name, class_id").eq("status", "active").order("name"),
-    supabase.from("subjects").select("id, name, class_id").order("name"),
-  ]);
-
-  if (error) throw error;
+  type MatRow = Pick<Tables<"study_materials">, "id" | "title" | "description" | "file_path" | "mime_type" | "size_bytes" | "visibility" | "is_active" | "created_at"> & {
+    classes: { id: string; name: string } | null;
+    batches: { id: string; name: string } | null;
+    subjects: { id: string; name: string } | null;
+    profiles: { full_name: string } | null;
+  };
+  const { rows: materials, count, classes, batches, subjects } = await api<{
+    rows: MatRow[];
+    count: number;
+    classes: { id: string; name: string }[];
+    batches: { id: string; name: string; class_id: string }[];
+    subjects: { id: string; name: string; class_id: string | null }[];
+  }>("/learning/materials", { query: { page, pageSize, q: searchQ, class: selectedClass, batch: selectedBatch, subject: selectedSubject } });
 
   const uploadBtn = (
     <UploadMaterialDialog

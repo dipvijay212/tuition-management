@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { requireRole, type AppRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/states";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,26 +16,21 @@ import { cn } from "@/lib/utils";
 
 export async function NotificationsPage({ role, searchParams }: { role: AppRole; searchParams: Record<string, string | string[] | undefined> }) {
   const ctx = await requireRole(role);
-  const { page, pageSize, from, to } = pageParams(searchParams, 25);
-  const supabase = await createClient();
-  let q = supabase.from("notifications").select("id, type, title, body, link, read_at, created_at", { count: "exact" }).order("created_at", { ascending: false }).range(from, to);
-  if (str(searchParams.filter) === "unread") q = q.is("read_at", null);
-  const [{ data, count, error }, { data: prefs }, { count: unread }] = await Promise.all([
-    q,
-    supabase.from("notification_preferences").select("type, in_app"),
-    supabase.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null),
-  ]);
-  if (error) throw error;
+  const { page, pageSize } = pageParams(searchParams, 25);
+  type Row = { id: string; type: string; title: string; body: string | null; link: string | null; read_at: string | null; created_at: string };
+  const { rows: data, count, unread, prefs } = await api<{ rows: Row[]; count: number; unread: number; prefs: { type: string; in_app: boolean }[] }>("/notifications", {
+    query: { page, pageSize, filter: str(searchParams.filter) },
+  });
   return (
     <>
       <PageHeader title="Notifications" description={`${unread ?? 0} unread`} actions={<MarkAllRead disabled={!unread} />} />
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div>
           <FilterBar><SelectFilter param="filter" label="Show" allLabel="All" options={[{ value: "unread", label: "Unread only" }]} /></FilterBar>
-          {(data ?? []).length === 0 ? <EmptyState icon={Bell} title="No notifications" description="Updates about attendance, fees, results and announcements appear here." /> : (
+          {data.length === 0 ? <EmptyState icon={Bell} title="No notifications" description="Updates about attendance, fees, results and announcements appear here." /> : (
             <div className="overflow-hidden rounded-xl border bg-card">
               <ul className="divide-y">
-                {data!.map((n) => (
+                {data.map((n) => (
                   <li key={n.id}>
                     <Link href={resolveNotificationLink(role, n.link)} className={cn("flex gap-3 px-4 py-3 hover:bg-muted/50", !n.read_at && "bg-primary/5")}>
                       <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", n.read_at ? "bg-transparent" : "bg-primary")} />

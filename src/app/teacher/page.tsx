@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Layers, Users, CalendarClock, NotebookPen } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -22,16 +22,10 @@ type T = {
 
 export default async function TeacherDashboard() {
   const ctx = await requireRole("teacher");
-  const supabase = await createClient();
-  const [{ data, error }, { data: ann }] = await Promise.all([
-    supabase.rpc("teacher_dashboard"),
-    supabase.from("announcements").select("id, title, body, created_at").order("created_at", { ascending: false }).limit(4),
-  ]);
-  if (error) {
-    if (error.message.includes("Not authorized")) return <EmptyState title="Your teacher profile isn't linked yet" description="Ask the institute admin to link your login to your teacher record." />;
-    throw new Error(error.message);
-  }
-  const d = data as unknown as T;
+  const r = await api<{ linked: boolean; dashboard: T | null; announcements: { id: string; title: string; body: string | null; created_at: string }[] }>("/dashboard/teacher");
+  if (!r.linked || !r.dashboard) return <EmptyState title="Your teacher profile isn't linked yet" description="Ask the institute admin to link your login to your teacher record." />;
+  const d = r.dashboard;
+  const ann = r.announcements;
   return (
     <>
       <PageHeader title={`Hello, ${ctx.profile.full_name.split(" ")[0]}`} description={formatDate(d.today, { weekday: "long", day: "numeric", month: "long" })} />

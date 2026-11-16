@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -9,14 +10,11 @@ export const metadata: Metadata = { title: "Exam Results" };
 
 export default async function TeacherResultsPage() {
   await requireRole("teacher");
-  const supabase = await createClient();
-
-  const { data: results, error } = await supabase
-    .from("published_results")
-    .select("id, total_obtained, total_max, percentage, grade, is_pass, rank, examinations(name), students(full_name, admission_no)")
-    .order("rank", { ascending: true, nullsFirst: false });
-
-  if (error) throw error;
+  type Row = Pick<Tables<"published_results">, "id" | "total_obtained" | "total_max" | "percentage" | "grade" | "is_pass" | "rank"> & {
+    examinations: { name: string } | null;
+    students: { full_name: string; admission_no: string } | null;
+  };
+  const { rows: results } = await api<{ rows: Row[] }>("/exams/results");
 
   return (
     <>

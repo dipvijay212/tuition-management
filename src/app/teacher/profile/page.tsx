@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AccountCard } from "@/features/profile/account-card";
@@ -10,11 +11,11 @@ export const metadata: Metadata = { title: "Profile" };
 
 export default async function TeacherProfile() {
   const ctx = await requireRole("teacher");
-  const supabase = await createClient();
   // Both in parallel; the institute's subject list is small, so filter it here instead of a second round trip.
-  const [{ data: t }, { data: allSubs }] = await Promise.all([
-    supabase.from("teachers").select("full_name, phone, email, qualification, specialization, joining_date, subject_ids").eq("profile_id", ctx.userId).maybeSingle(),
-    supabase.from("subjects").select("id, name").order("name"),
+  type Me = Pick<Tables<"teachers">, "full_name" | "phone" | "email" | "qualification" | "specialization" | "joining_date" | "subject_ids">;
+  const [t, allSubs] = await Promise.all([
+    api<Me | null>("/teachers/me"),
+    api<{ id: string; name: string }[]>("/teachers/subject-options", { query: { all: "1" } }),
   ]);
   const subs = (allSubs ?? []).filter((s) => t?.subject_ids.includes(s.id));
   return (

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Check, AlertTriangle, X, Clock, Baby } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { familyChildren, familyHomework } from "@/features/family/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { formatDate, todayIn } from "@/lib/utilities/format";
@@ -10,47 +10,17 @@ export const metadata: Metadata = { title: "Child's Homework" };
 
 export default async function ParentHomeworkPage() {
   await requireRole("parent");
-  const supabase = await createClient();
   const today = todayIn();
-
-  // Find linked children
-  const { data: links } = await supabase
-    .from("parent_students")
-    .select("student_id, students(id, full_name, student_batches(batch_id, status))");
-
-  const students = (links ?? []).map((l) => l.students).filter(Boolean);
+  const [students, homeworkList] = await Promise.all([familyChildren(), familyHomework()]);
   const studentMap = new Map<string, string>();
-  for (const s of students) {
-    if (s) studentMap.set(s.id, s.full_name);
-  }
+  for (const s of students) studentMap.set(s.id, s.full_name);
 
   const batchStudentMap = new Map<string, string>();
   for (const s of students) {
-    if (s) {
-      for (const sb of s.student_batches ?? []) {
-        if (sb.status === "active") {
-          batchStudentMap.set(sb.batch_id, s.full_name);
-        }
-      }
+    for (const sb of s.student_batches ?? []) {
+      if (sb.status === "active") batchStudentMap.set(sb.batch_id, s.full_name);
     }
   }
-
-  const batchIds = Array.from(batchStudentMap.keys());
-
-  const { data: homeworkList, error } = batchIds.length > 0
-    ? await supabase
-        .from("homework")
-        .select(`
-          id, title, description, assigned_date, due_at, batch_id,
-          batches(name),
-          subjects(name),
-          homework_submissions(student_id, status, feedback)
-        `)
-        .in("batch_id", batchIds)
-        .order("due_at", { ascending: false })
-    : { data: [], error: null };
-
-  if (error) throw error;
 
   return (
     <div className="space-y-6">

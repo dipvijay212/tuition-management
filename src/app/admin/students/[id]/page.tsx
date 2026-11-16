@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FileText, Pencil, Phone, Mail } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
-import { signedUrls } from "@/lib/supabase/storage";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,27 +23,33 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
 export default async function StudentProfile(props: PageProps<"/admin/students/[id]">) {
   const ctx = await requireRole("admin");
   const { id } = await props.params;
-  const supabase = await createClient();
-  // Everything keyed by the student id loads in one parallel round trip (the student row included).
-  const [{ data: s }, parents, enrolments, obligations, payments, summary, recentAtt, results, docs, history, subjects, allBatches, audit] = await Promise.all([
-    supabase.from("students").select("*, classes(name), academic_years(name)").eq("id", id).maybeSingle(),
-    supabase.from("parent_students").select("id, relationship, is_primary, is_emergency_contact, guardians(id, full_name, phone, alt_phone, email, profile_id)").eq("student_id", id),
-    supabase.from("student_batches").select("id, start_date, end_date, status, end_reason, batches(id, name, classes(name))").eq("student_id", id).order("start_date", { ascending: false }),
-    supabase.from("fee_obligation_balances").select("id, description, due_date, net_amount, amount_paid, balance, effective_status, discount_amount, gross_amount, late_fee_amount").eq("student_id", id).order("due_date"),
-    supabase.from("payments").select("id, amount, payment_date, method, reference, status, receipts(receipt_no)").eq("student_id", id).order("payment_date", { ascending: false }).limit(20),
-    supabase.rpc("attendance_summary", { p_student: id }),
-    supabase.from("attendance").select("id, session_date, status, batches(name)").eq("student_id", id).order("session_date", { ascending: false }).limit(15),
-    supabase.from("published_results").select("id, percentage, grade, is_pass, rank, total_obtained, total_max, examinations(name, start_date)").eq("student_id", id).order("published_at", { ascending: false }),
-    supabase.from("student_documents").select("id, title, file_path, created_at, size_bytes").eq("student_id", id).order("created_at", { ascending: false }),
-    supabase.from("student_status_history").select("id, from_status, to_status, reason, changed_at").eq("student_id", id).order("changed_at", { ascending: false }),
-    supabase.from("subjects").select("id, name"), // small list; filtered to the student's subjects below
-    supabase.from("batches").select("id, name, capacity, student_batches(status)").eq("status", "active").order("name"),
-    supabase.from("audit_logs").select("id, action, created_at, reason").eq("entity_id", id).order("created_at", { ascending: false }).limit(20),
-  ]);
-  if (!s) notFound();
-  subjects.data = (subjects.data ?? []).filter((x) => s.subject_ids.includes(x.id));
-  // Photo and document links are signed in a single storage call.
-  const docUrls = await signedUrls([...(s.photo_path ? [s.photo_path] : []), ...(docs.data ?? []).map((d) => d.file_path)]);
+  // Everything keyed by the student id loads in one round trip.
+  type Obl = { id: string; description: string; due_date: string; net_amount: number; amount_paid: number; balance: number; effective_status: string | null; discount_amount: number; gross_amount: number; late_fee_amount: number };
+  type Detail = {
+    student: (Tables<"students"> & { classes: { name: string } | null; academic_years: { name: string } | null }) | null;
+    parents: { id: string; relationship: string; is_primary: boolean; is_emergency_contact: boolean; guardians: Pick<Tables<"guardians">, "id" | "full_name" | "phone" | "alt_phone" | "email" | "profile_id"> | null }[];
+    enrolments: { id: string; start_date: string; end_date: string | null; status: string; end_reason: string | null; batches: { id: string; name: string; classes: { name: string } | null } | null }[];
+    obligations: Obl[];
+    payments: { id: string; amount: number; payment_date: string; method: string; reference: string | null; status: string; receipts: { receipt_no: string } | null }[];
+    summary: { total_sessions: number; attended: number; absent: number; late: number; excused: number; percentage: number | null }[];
+    recentAtt: { id: string; session_date: string; status: string; batches: { name: string } | null }[];
+    results: { id: string; percentage: number; grade: string | null; is_pass: boolean; rank: number | null; total_obtained: number; total_max: number; examinations: { name: string; start_date: string | null } | null }[];
+    docs: { id: string; title: string; file_path: string; created_at: string; size_bytes: number | null }[];
+    history: { id: string; from_status: string | null; to_status: string; reason: string | null; changed_at: string }[];
+    subjects: { id: string; name: string }[];
+    allBatches: { id: string; name: string; capacity: number | null; student_batches: { status: string }[] }[];
+    audit: { id: number; action: string; created_at: string; reason: string | null }[];
+    urls: Record<string, string>;
+  };
+  const r = await api<Detail>(`/students/${encodeURIComponent(id)}`).catch(() => null);
+  const s = r?.student;
+  if (!r || !s) notFound();
+  const wrap = <T,>(data: T) => ({ data });
+  const [parents, enrolments, obligations, payments, summary, recentAtt, results, docs, history, subjects, allBatches, audit] = [
+    wrap(r.parents), wrap(r.enrolments), wrap(r.obligations), wrap(r.payments), wrap(r.summary), wrap(r.recentAtt),
+    wrap(r.results), wrap(r.docs), wrap(r.history), wrap(r.subjects), wrap(r.allBatches), wrap(r.audit),
+  ];
+  const docUrls: Record<string, string | null> = r.urls;
   const photo = s.photo_path ? (docUrls[s.photo_path] ?? null) : null;
   const att = summary.data?.[0];
   const obl = obligations.data ?? [];

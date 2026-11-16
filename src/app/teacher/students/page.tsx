@@ -1,23 +1,20 @@
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { FilterBar, SearchInput } from "@/components/shared/filters";
-import { likeTerm, pageParams, str } from "@/lib/utilities/query";
+import { pageParams, str } from "@/lib/utilities/query";
 
 export const metadata: Metadata = { title: "My students" };
 
 export default async function TeacherStudents(props: PageProps<"/teacher/students">) {
   await requireRole("teacher");
   const sp = await props.searchParams;
-  const { page, pageSize, from, to } = pageParams(sp);
-  const supabase = await createClient();
-  // RLS limits this to students actively enrolled in the teacher's batches.
-  let q = supabase.from("students").select("id, full_name, admission_no, classes(name), student_batches(status, batches(name))", { count: "exact" }).eq("status", "active").order("full_name").range(from, to);
-  if (str(sp.q)) { const t = likeTerm(str(sp.q)!); q = q.or(`full_name.ilike.${t},admission_no.ilike.${t}`); }
-  const { data, count, error } = await q;
-  if (error) throw error;
+  const { page, pageSize } = pageParams(sp);
+  // The backend limits this to students actively enrolled in the teacher's batches.
+  type Row = { id: string; full_name: string; admission_no: string; classes: { name: string } | null; student_batches: { status: string; batches: { name: string } | null }[] };
+  const { rows: data, count } = await api<{ rows: Row[]; count: number }>("/dashboard/teacher/students", { query: { page, pageSize, q: str(sp.q) } });
   return (
     <>
       <PageHeader title="My students" description="Students enrolled in your batches." />

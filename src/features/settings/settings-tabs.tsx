@@ -16,7 +16,7 @@ import { formatDate, DAYS } from "@/lib/utilities/format";
 import { saveAcademicYear, saveEmailSettings, saveGradingRules, saveInstituteProfile, savePolicies } from "./actions";
 import { TestEmailDialog } from "./test-email-dialog";
 import type { Tables } from "@/types/database";
-import type { SmtpStatus } from "@/lib/email/mailer";
+import type { SmtpStatus } from "./types";
 
 type Props = {
   institute: Tables<"institutes"> & { logo_url: string | null };

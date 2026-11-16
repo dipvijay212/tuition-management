@@ -2,41 +2,30 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus, CalendarCheck, Users, Settings2 } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { FilterBar, SearchInput, SelectFilter } from "@/components/shared/filters";
 import { Button } from "@/components/ui/button";
 import { formatTime, DAYS } from "@/lib/utilities/format";
-import { likeTerm, pageParams, str } from "@/lib/utilities/query";
+import { pageParams, str } from "@/lib/utilities/query";
 
 export const metadata: Metadata = { title: "Batches" };
 
 export default async function BatchesPage(props: PageProps<"/admin/batches">) {
   await requireRole("admin");
   const sp = await props.searchParams;
-  const { page, pageSize, from, to } = pageParams(sp);
-  const supabase = await createClient();
-  let q = supabase
-    .from("batches")
-    .select(
-      "id, name, capacity, room, status, class_days, start_time, end_time, classes(name), teacher_batches(is_active, teachers(full_name)), student_batches(status)",
-      { count: "exact" }
-    )
-    .order("name")
-    .range(from, to);
-
-  if (str(sp.q)) q = q.ilike("name", likeTerm(str(sp.q)!));
-  if (str(sp.class)) q = q.eq("class_id", str(sp.class)!);
-  if (str(sp.status)) q = q.eq("status", str(sp.status) as "active");
-
-  const [{ data, count, error }, { data: classes }] = await Promise.all([
-    q,
-    supabase.from("classes").select("id, name").order("sort_order").order("name"),
-  ]);
-
-  if (error) throw error;
+  const { page, pageSize } = pageParams(sp);
+  type Row = Pick<Tables<"batches">, "id" | "name" | "capacity" | "room" | "status" | "class_days" | "start_time" | "end_time"> & {
+    classes: { name: string } | null;
+    teacher_batches: { is_active: boolean; teachers: { full_name: string } | null }[];
+    student_batches: { status: string }[];
+  };
+  const { rows: data, count, classes } = await api<{ rows: Row[]; count: number; classes: { id: string; name: string }[] }>("/batches", {
+    query: { page, pageSize, q: str(sp.q), class: str(sp.class), status: str(sp.status) },
+  });
   const newBtn = (
     <Button nativeButton={false} render={<Link href="/admin/batches/new" />}>
       <Plus /> New batch

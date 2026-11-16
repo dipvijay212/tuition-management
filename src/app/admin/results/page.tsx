@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -12,27 +13,12 @@ export const metadata: Metadata = { title: "Exam Results" };
 export default async function AdminResultsPage(props: PageProps<"/admin/results">) {
   await requireRole("admin");
   const sp = await props.searchParams;
-  const { page, pageSize, from, to } = pageParams(sp);
-  const supabase = await createClient();
-
-  let q = supabase
-    .from("published_results")
-    .select(
-      "id, total_obtained, total_max, percentage, grade, is_pass, rank, examinations(id, name), students(id, full_name, admission_no)",
-      { count: "exact" }
-    )
-    .order("rank", { ascending: true, nullsFirst: false })
-    .order("percentage", { ascending: false })
-    .range(from, to);
-
-  if (str(sp.exam)) q = q.eq("examination_id", str(sp.exam)!);
-
-  const [{ data, count, error }, { data: exams }] = await Promise.all([
-    q,
-    supabase.from("examinations").select("id, name").order("name"),
-  ]);
-
-  if (error) throw error;
+  const { page, pageSize } = pageParams(sp);
+  type Row = Pick<Tables<"published_results">, "id" | "total_obtained" | "total_max" | "percentage" | "grade" | "is_pass" | "rank"> & {
+    examinations: { id: string; name: string } | null;
+    students: { id: string; full_name: string; admission_no: string } | null;
+  };
+  const { rows: data, count, exams } = await api<{ rows: Row[]; count: number; exams: { id: string; name: string }[] }>("/exams/results", { query: { page, pageSize, exam: str(sp.exam) } });
 
   return (
     <>

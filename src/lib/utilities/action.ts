@@ -3,6 +3,7 @@ import { z } from "zod";
 import { fieldErrors } from "@/lib/validations/common";
 import { friendlyError, type ActionResult } from "./errors";
 import { assertRole, type AppRole, type SessionContext } from "@/lib/auth/session";
+import { ApiError } from "@/lib/api/server";
 
 /** Parse FormData into a plain object (multi-value keys become arrays when listed). */
 export function formToObject(form: FormData, arrays: string[] = []) {
@@ -17,7 +18,7 @@ export function formToObject(form: FormData, arrays: string[] = []) {
 
 /**
  * Wraps a server action: role check -> zod validation -> handler -> friendly errors.
- * Authorization is ALSO enforced by RLS / database functions; this is defense in depth.
+ * Authorization is ALSO enforced by the backend API; this is defense in depth.
  */
 export function makeAction<S extends z.ZodType, R = undefined>(opts: { roles: AppRole[]; schema: S; arrays?: string[]; handler: (input: z.infer<S>, ctx: SessionContext, form: FormData) => Promise<ActionResult<R> | void> }) {
   return async (_prev: ActionResult<unknown> | undefined, form: FormData): Promise<ActionResult<R>> => {
@@ -29,6 +30,7 @@ export function makeAction<S extends z.ZodType, R = undefined>(opts: { roles: Ap
       return (await opts.handler(parsed.data, ctx, form)) ?? { ok: true };
     } catch (e) {
       if ((e as { digest?: string })?.digest?.startsWith("NEXT_REDIRECT")) throw e;
+      if (e instanceof ApiError) return { ok: false, error: e.message, fieldErrors: e.fieldErrors };
       return { ok: false, error: friendlyError(e) };
     }
   };

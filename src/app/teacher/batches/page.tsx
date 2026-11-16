@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -11,17 +12,12 @@ export const metadata: Metadata = { title: "My batches" };
 
 export default async function TeacherBatches() {
   await requireRole("teacher");
-  const supabase = await createClient();
-  // One round trip: active assignments with the batch embedded.
-  const { data: tb } = await supabase
-    .from("teacher_batches")
-    .select("batches!inner(id, name, room, status, class_days, start_time, end_time, capacity, classes(name), student_batches(status), batch_subjects(subjects(name)))")
-    .eq("is_active", true);
-  const seen = new Set<string>();
-  const data = (tb ?? [])
-    .map((t) => t.batches)
-    .filter((b) => b && !seen.has(b.id) && seen.add(b.id))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  type Row = Pick<Tables<"batches">, "id" | "name" | "room" | "status" | "class_days" | "start_time" | "end_time" | "capacity"> & {
+    classes: { name: string } | null;
+    student_batches: { status: string }[];
+    batch_subjects: { subjects: { name: string } | null }[];
+  };
+  const data = await api<Row[]>("/batches/mine/list");
   return (
     <>
       <PageHeader title="My batches" description="Batches assigned to you by the institute." />

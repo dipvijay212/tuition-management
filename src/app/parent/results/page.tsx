@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { familyResults } from "@/features/family/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,14 +10,7 @@ export const metadata: Metadata = { title: "Children Results" };
 
 export default async function ParentResultsPage() {
   await requireRole("parent");
-  const supabase = await createClient();
-
-  const { data: results, error } = await supabase
-    .from("published_results")
-    .select("id, total_obtained, total_max, percentage, grade, is_pass, rank, subject_breakdown, published_at, examinations(name), students(full_name)")
-    .order("published_at", { ascending: false });
-
-  if (error) throw error;
+  const results = await familyResults();
 
   return (
     <div className="space-y-6">

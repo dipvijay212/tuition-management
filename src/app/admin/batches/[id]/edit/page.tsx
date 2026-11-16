@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { BatchForm } from "@/features/batches/batch-form";
 import { batchFormOptions } from "@/features/batches/load";
@@ -11,9 +12,9 @@ export const metadata: Metadata = { title: "Edit batch" };
 export default async function EditBatchPage(props: PageProps<"/admin/batches/[id]/edit">) {
   await requireRole("admin");
   const { id } = await props.params;
-  const supabase = await createClient();
-  const [{ data: b }, opts] = await Promise.all([
-    supabase.from("batches").select("*, teacher_batches(teacher_id, is_active), batch_subjects(subject_id)").eq("id", id).maybeSingle(),
+  type Batch = Tables<"batches"> & { teacher_batches: { teacher_id: string; is_active: boolean }[]; batch_subjects: { subject_id: string }[] };
+  const [{ batch: b }, opts] = await Promise.all([
+    api<{ batch: Batch | null }>(`/batches/${encodeURIComponent(id)}`).catch(() => ({ batch: null })),
     batchFormOptions(),
   ]);
   if (!b) notFound();

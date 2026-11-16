@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -11,14 +12,8 @@ export const metadata: Metadata = { title: "Examinations" };
 
 export default async function TeacherExaminationsPage() {
   await requireRole("teacher");
-  const supabase = await createClient();
-
-  const { data: exams, error } = await supabase
-    .from("examinations")
-    .select("id, name, exam_type, start_date, end_date, status, batches(name)")
-    .order("start_date", { ascending: false });
-
-  if (error) throw error;
+  type Row = Pick<Tables<"examinations">, "id" | "name" | "exam_type" | "start_date" | "end_date" | "status"> & { batches: { name: string } | null };
+  const exams = await api<Row[]>("/exams/mine");
 
   return (
     <>

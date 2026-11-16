@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { familyAttendance, myStudent } from "@/features/family/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatCard } from "@/components/shared/stat-card";
@@ -12,8 +12,6 @@ export const metadata: Metadata = { title: "My Attendance" };
 
 export default async function StudentAttendancePage() {
   const session = await requireRole("student");
-  const supabase = await createClient();
-
   if (!session.institute) {
     return (
       <>
@@ -23,17 +21,7 @@ export default async function StudentAttendancePage() {
     );
   }
 
-  // Find student ID
-  // One round trip: the student's own record with attendance embedded.
-  const { data: student, error } = await supabase
-    .from("students")
-    .select("id, attendance(id, session_date, status, remarks, batches(name))")
-    .eq("profile_id", session.userId)
-    .eq("institute_id", session.institute.id)
-    .order("session_date", { referencedTable: "attendance", ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
+  const [student, attendance] = await Promise.all([myStudent(), familyAttendance()]);
 
   if (!student) {
     return (
@@ -44,7 +32,7 @@ export default async function StudentAttendancePage() {
     );
   }
 
-  const records = student.attendance;
+  const records = attendance;
 
   const total = records?.length ?? 0;
   const present = records?.filter((r) => r.status === "present").length ?? 0;

@@ -13,7 +13,8 @@ import {
   CalendarCheck,
 } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -22,88 +23,56 @@ import { FilterBar, SelectFilter, DateFilter, SearchInput } from "@/components/s
 import { Button } from "@/components/ui/button";
 import { TakeAttendanceDialog } from "@/features/attendance/take-attendance-dialog";
 import { formatDate, formatTime, todayIn, DAYS } from "@/lib/utilities/format";
-import { pageParams, str, likeTerm } from "@/lib/utilities/query";
+import { pageParams, str } from "@/lib/utilities/query";
 
 export const metadata: Metadata = { title: "Attendance Management" };
 
-/**
- * Class-detail data for the attendance page. Sessions are scoped to the class with an inner join
- * (instead of first fetching batch ids), and attendance rows are embedded, so it is one round trip.
- */
-async function loadClassDetail(supabase: Awaited<ReturnType<typeof createClient>>, classId: string, today: string, sp: Record<string, string | string[] | undefined>) {
-  const { from, to } = pageParams(sp);
-  const selectedBatchFilter = str(sp.batch);
-  const selectedDateFilter = str(sp.date);
-  const IN_CLASS = "in_class:batches!inner(class_id, status)";
+type Att = { status: string }[];
+type DetailBatch = Pick<Tables<"batches">, "id" | "class_id" | "name" | "capacity" | "room" | "status" | "class_days" | "start_time" | "end_time"> & {
+  teacher_batches: { is_active: boolean; teachers: { id: string; full_name: string } | null }[];
+  student_batches: { id: string; status: string; student_id: string }[];
+};
+type TodaySession = Pick<Tables<"class_sessions">, "id" | "batch_id" | "session_date" | "attendance_submitted_at" | "status"> & { attendance: Att };
+type HistorySession = Pick<Tables<"class_sessions">, "id" | "batch_id" | "session_date" | "start_time" | "end_time" | "room" | "status" | "attendance_submitted_at"> & {
+  batches: { id: string; name: string } | null;
+  subjects: { name: string } | null;
+  teachers: { full_name: string } | null;
+  attendance: Att;
+};
 
-  let historyQuery = supabase
-    .from("class_sessions")
-    .select(
-      `id, batch_id, session_date, start_time, end_time, room, status, attendance_submitted_at, batches(id, name), subjects(name), teachers(full_name), attendance(status), ${IN_CLASS}`,
-      { count: "exact" }
-    )
-    .eq("in_class.class_id", classId)
-    .eq("in_class.status", "active")
-    .lte("session_date", today)
-    .order("session_date", { ascending: false })
-    .range(from, to);
-  if (selectedBatchFilter) historyQuery = historyQuery.eq("batch_id", selectedBatchFilter);
-  if (selectedDateFilter) historyQuery = historyQuery.eq("session_date", selectedDateFilter);
-
-  const [batchesRes, subjectsRes, todayRes, historyRes] = await Promise.all([
-    supabase
-      .from("batches")
-      .select(`
-        id, class_id, name, capacity, room, status, class_days, start_time, end_time,
-        teacher_batches(is_active, teachers(id, full_name)),
-        student_batches(id, status, student_id)
-      `)
-      .eq("class_id", classId)
-      .eq("status", "active")
-      .order("name"),
-    supabase
-      .from("subjects")
-      .select("id, name, class_id")
-      .or(`class_id.eq.${classId},class_id.is.null`)
-      .order("name"),
-    supabase
-      .from("class_sessions")
-      .select(`id, batch_id, session_date, attendance_submitted_at, status, attendance(status), ${IN_CLASS}`)
-      .eq("in_class.class_id", classId)
-      .eq("in_class.status", "active")
-      .eq("session_date", today),
-    historyQuery,
-  ]);
-  return { batchesRes, subjectsRes, todayRes, historyRes };
+/** Class-detail data for the attendance page (one backend call). Shaped like the old query results. */
+async function loadClassDetail(classId: string, sp: Record<string, string | string[] | undefined>) {
+  const { page, pageSize } = pageParams(sp);
+  const d = await api<{ batches: DetailBatch[]; subjects: { id: string; name: string; class_id: string | null }[]; todaySessions: TodaySession[]; history: { rows: HistorySession[]; count: number } }>(
+    `/attendance/admin/classes/${encodeURIComponent(classId)}`,
+    { query: { page, pageSize, batch: str(sp.batch), date: str(sp.date) } },
+  );
+  return {
+    batchesRes: { data: d.batches, error: null },
+    subjectsRes: { data: d.subjects },
+    todayRes: { data: d.todaySessions },
+    historyRes: { data: d.history.rows, count: d.history.count, error: null },
+  };
 }
 
 
 export default async function AdminAttendancePage(props: PageProps<"/admin/attendance">) {
   await requireRole("admin");
   const sp = await props.searchParams;
-  const supabase = await createClient();
   const today = todayIn();
 
   const selectedClassId = str(sp.class);
 
-  // 1. Fetch all active classes with their batch and student counts
-  let classQuery = supabase
-    .from("classes")
-    .select("id, name, description, sort_order, status, academic_years(name), batches(id, status), students(id, status)")
-    .eq("status", "active")
-    .order("sort_order")
-    .order("name");
-
-  if (str(sp.q) && !selectedClassId) {
-    classQuery = classQuery.ilike("name", likeTerm(str(sp.q)!));
-  }
-
-  // When a class is selected, its detail queries start now, in parallel with the class list.
-  const detailP = selectedClassId ? loadClassDetail(supabase, selectedClassId, today, sp) : null;
+  // 1. Active classes with their batch and student counts.
+  type ClassRow = Pick<Tables<"classes">, "id" | "name" | "description" | "sort_order" | "status"> & {
+    academic_years: { name: string } | null;
+    batches: { id: string; status: string }[];
+    students: { id: string; status: string }[];
+  };
+  // When a class is selected, its detail loads in parallel with the class list.
+  const detailP = selectedClassId ? loadClassDetail(selectedClassId, sp) : null;
   detailP?.catch(() => {});
-
-  const { data: rawClasses, error: classError } = await classQuery;
-  if (classError) throw classError;
+  const rawClasses = await api<ClassRow[]>("/attendance/admin/classes", { query: { q: !selectedClassId ? str(sp.q) : undefined } });
 
   const classes = (rawClasses ?? []).map((c) => ({
     id: c.id,

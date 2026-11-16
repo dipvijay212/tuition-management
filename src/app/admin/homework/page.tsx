@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { NotebookPen, Check, AlertTriangle, X } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { FilterBar, SearchInput, SelectFilter } from "@/components/shared/filters";
@@ -9,45 +10,28 @@ import { AssignHomeworkDialog } from "@/features/homework/assign-dialog";
 import { CheckHomeworkDialog } from "@/features/homework/check-dialog";
 import { DeleteHomeworkButton } from "@/features/homework/homework-actions";
 import { formatDate, todayIn } from "@/lib/utilities/format";
-import { pageParams, str, likeTerm } from "@/lib/utilities/query";
+import { pageParams, str } from "@/lib/utilities/query";
 
 export const metadata: Metadata = { title: "Homework Management" };
 
 export default async function AdminHomeworkPage(props: PageProps<"/admin/homework">) {
   await requireRole("admin");
   const sp = await props.searchParams;
-  const { page, pageSize, from, to } = pageParams(sp);
-  const supabase = await createClient();
+  const { page, pageSize } = pageParams(sp);
   const today = todayIn();
 
   const selectedBatch = str(sp.batch);
   const selectedSubject = str(sp.subject);
   const searchQ = str(sp.q);
-
-  let q = supabase
-    .from("homework")
-    .select(
-      "id, title, description, assigned_date, due_at, batch_id, subject_id, batches(id, name, classes(name)), subjects(id, name), homework_submissions(status)",
-      { count: "exact" }
-    )
-    .order("due_at", { ascending: false })
-    .range(from, to);
-
-  if (searchQ) q = q.ilike("title", likeTerm(searchQ));
-  if (selectedBatch) q = q.eq("batch_id", selectedBatch);
-  if (selectedSubject) q = q.eq("subject_id", selectedSubject);
-
-  const [
-    { data: homeworkList, count, error },
-    { data: batches },
-    { data: subjects },
-  ] = await Promise.all([
-    q,
-    supabase.from("batches").select("id, name").eq("status", "active").order("name"),
-    supabase.from("subjects").select("id, name").order("name"),
-  ]);
-
-  if (error) throw error;
+  type HwRow = Pick<Tables<"homework">, "id" | "title" | "description" | "assigned_date" | "due_at" | "batch_id" | "subject_id"> & {
+    batches: { id: string; name: string; classes: { name: string } | null } | null;
+    subjects: { id: string; name: string } | null;
+    homework_submissions: { status: string }[];
+  };
+  const { rows: homeworkList, count, batches, subjects } = await api<{ rows: HwRow[]; count: number; batches: { id: string; name: string }[]; subjects: { id: string; name: string }[] }>(
+    "/learning/homework",
+    { query: { page, pageSize, q: searchQ, batch: selectedBatch, subject: selectedSubject } },
+  );
 
   const assignBtn = (
     <AssignHomeworkDialog

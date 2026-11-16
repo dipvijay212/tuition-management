@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -13,47 +14,15 @@ export const metadata: Metadata = { title: "Marks Entry" };
 export default async function TeacherExamDetailPage(props: PageProps<"/teacher/examinations/[id]">) {
   await requireRole("teacher");
   const { id } = await props.params;
-  const supabase = await createClient();
-
-  // Everything that only needs the exam id loads in parallel (one round trip).
-  const [{ data: exam, error }, { data: examSubjects }, { data: existingMarks }] = await Promise.all([
-    supabase
-      .from("examinations")
-      .select("id, name, exam_type, start_date, end_date, status, batch_id, batches(name)")
-      .eq("id", id)
-      .single(),
-    supabase
-      .from("examination_subjects")
-      .select("id, subject_id, exam_date, max_marks, passing_marks, subjects(name)")
-      .eq("examination_id", id),
-    supabase
-      .from("marks")
-      .select("examination_subject_id, student_id, obtained_marks, is_absent, remarks, examination_subjects!inner(examination_id)")
-      .eq("examination_subjects.examination_id", id),
-  ]);
-
-  if (error || !exam) notFound();
-
-  // Enrolled students: one more round trip, since it depends on the exam's batch.
+  type ExamSubject = Pick<Tables<"examination_subjects">, "id" | "subject_id" | "exam_date" | "max_marks" | "passing_marks"> & { subjects: { id: string; name: string } | null };
+  type Mark = Pick<Tables<"marks">, "examination_subject_id" | "student_id" | "obtained_marks" | "is_absent" | "remarks">;
   type Eligible = { id: string; full_name: string; admission_no: string };
-  let eligibleStudents: Eligible[] = [];
-  if (exam.batch_id) {
-    const { data: enrolled } = await supabase
-      .from("student_batches")
-      .select("students!inner(id, full_name, admission_no, status)")
-      .eq("batch_id", exam.batch_id)
-      .eq("status", "active")
-      .eq("students.status", "active");
-    const seen = new Set<string>();
-    for (const e of enrolled ?? []) {
-      const st = e.students as unknown as Eligible | null;
-      if (st && !seen.has(st.id)) { seen.add(st.id); eligibleStudents.push({ id: st.id, full_name: st.full_name, admission_no: st.admission_no }); }
-    }
-    eligibleStudents.sort((a, b) => a.full_name.localeCompare(b.full_name));
-  } else {
-    const { data } = await supabase.from("students").select("id, full_name, admission_no").eq("status", "active").order("full_name");
-    eligibleStudents = data ?? [];
-  }
+  type Exam = Pick<Tables<"examinations">, "id" | "name" | "exam_type" | "start_date" | "end_date" | "status" | "result_publish_date" | "class_id" | "batch_id"> & { classes: { name: string } | null; batches: { name: string } | null };
+  const r = await api<{ exam: Exam | null; examSubjects: ExamSubject[]; allSubjects: { id: string; name: string }[]; marks: Mark[]; students: Eligible[] }>(`/exams/${encodeURIComponent(id)}`).catch(() => null);
+  const exam = r?.exam;
+  if (!r || !exam) notFound();
+  const { examSubjects, marks: existingMarks } = r;
+  const eligibleStudents: Eligible[] = r.students;
 
   const marksMap = new Map<string, Map<string, { obtained_marks: number | null; is_absent: boolean; remarks: string | null }>>();
   for (const m of existingMarks ?? []) {

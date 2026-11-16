@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { UserCheck, GraduationCap, Layers, CalendarCheck, Wallet, IndianRupee, TrendingUp, TrendingDown, Cake, Megaphone, UserPlus, ClipboardList } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -53,10 +53,7 @@ export default async function AdminDashboard(props: PageProps<"/admin">) {
   const from = str(sp.from) && /^\d{4}-\d{2}-\d{2}$/.test(str(sp.from)!) ? str(sp.from)! : shiftMonths(today, months - 1);
   const to = str(sp.to) && /^\d{4}-\d{2}-\d{2}$/.test(str(sp.to)!) ? str(sp.to)! : today;
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("admin_dashboard", { p_from: from, p_to: to });
-  if (error) throw new Error(error.message);
-  const d = data as unknown as D;
+  const d = await api<D>("/dashboard/admin", { query: { from, to } });
   const c = d.cards;
   const surplus = Number(c.range_collection) + Number(c.range_other_income) - Number(c.range_expenses);
 

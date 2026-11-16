@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Json, Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -15,30 +16,13 @@ export const metadata: Metadata = { title: "Payments" };
 export default async function AdminPaymentsPage(props: PageProps<"/admin/payments">) {
   await requireRole("admin");
   const sp = await props.searchParams;
-  const { page, pageSize, from, to } = pageParams(sp);
-  const supabase = await createClient();
-
-  let q = supabase
-    .from("payments")
-    .select(
-      "id, amount, payment_date, method, reference, remarks, status, students(id, full_name, admission_no, phone, classes(name)), receipts(receipt_no, snapshot)",
-      { count: "exact" }
-    )
-    .order("payment_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .range(from, to);
-
-  if (str(sp.method)) q = q.eq("method", str(sp.method) as "cash");
-
-  const [{ data, count, error }, { data: unpaidObligations }] = await Promise.all([
-    q,
-    supabase
-      .from("fee_obligations")
-      .select("student_id, net_amount, amount_paid, students(id, full_name, admission_no, phone, classes(name))")
-      .in("status", ["unpaid", "partially_paid"]),
-  ]);
-
-  if (error) throw error;
+  const { page, pageSize } = pageParams(sp);
+  type Stu = { id: string; full_name: string; admission_no: string; phone: string | null; classes: { name: string } | null };
+  type Row = Pick<Tables<"payments">, "id" | "amount" | "payment_date" | "method" | "reference" | "remarks" | "status"> & { students: Stu | null; receipts: { receipt_no: string; snapshot: Json } | null };
+  const { rows: data, count, unpaid: unpaidObligations } = await api<{ rows: Row[]; count: number; unpaid: { student_id: string; net_amount: number; amount_paid: number; students: Stu | null }[] }>(
+    "/fees/payments",
+    { query: { page, pageSize, method: str(sp.method) } },
+  );
 
   // Build eligible students with outstanding dues for the RecordPaymentDialog
   const studentMap = new Map<string, StudentOption>();

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { requireRole, type AppRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -8,22 +8,17 @@ import { FilterBar, SearchInput, SelectFilter } from "@/components/shared/filter
 import { UserRowActions } from "@/features/users/user-row-actions";
 import { NewAdminDialog } from "@/features/users/new-admin-dialog";
 import { formatDateTime } from "@/lib/utilities/format";
-import { likeTerm, pageParams, str } from "@/lib/utilities/query";
+import { pageParams, str } from "@/lib/utilities/query";
 
 export const metadata: Metadata = { title: "User management" };
 
 export default async function UsersPage(props: PageProps<"/admin/users">) {
   const ctx = await requireRole("admin");
   const sp = await props.searchParams;
-  const { page, pageSize, from, to } = pageParams(sp);
-  const supabase = await createClient();
+  const { page, pageSize } = pageParams(sp);
   const role = str(sp.role) as AppRole | undefined;
-  let q = supabase.from("profiles").select(`id, full_name, email, phone, status, last_login_at, user_roles!user_roles_user_id_fkey${role ? "!inner" : ""}(role)`, { count: "exact" }).order("full_name").range(from, to);
-  if (str(sp.q)) { const t = likeTerm(str(sp.q)!); q = q.or(`full_name.ilike.${t},email.ilike.${t},phone.ilike.${t}`); }
-  if (str(sp.status)) q = q.eq("status", str(sp.status) as "active");
-  if (role) q = q.eq("user_roles.role", role);
-  const { data, count, error } = await q;
-  if (error) throw error;
+  type Row = { id: string; full_name: string; email: string | null; phone: string | null; status: "active" | "inactive" | "suspended" | "pending_activation"; last_login_at: string | null; user_roles: { role: AppRole }[] };
+  const { rows: data, count } = await api<{ rows: Row[]; count: number }>("/users", { query: { page, pageSize, q: str(sp.q), status: str(sp.status), role } });
   return (
     <>
       <PageHeader title="User management" description="Login accounts, roles and access status. Users can never change their own role." actions={<NewAdminDialog />} />

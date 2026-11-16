@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDate, titleCase } from "@/lib/utilities/format";
@@ -9,12 +10,15 @@ function I({ l, v }: { l: string; v: React.ReactNode }) {
 
 /** Read-only student profile (RLS ensures the viewer is the student or a linked parent). */
 export async function StudentDetails({ studentId }: { studentId: string }) {
-  const supabase = await createClient();
-  const [{ data: s }, { data: batches }, { data: parents }] = await Promise.all([
-    supabase.from("students").select("full_name, admission_no, date_of_birth, gender, blood_group, school_name, admission_date, address, city, status, classes(name), academic_years(name)").eq("id", studentId).single(),
-    supabase.from("student_batches").select("id, start_date, status, batches(name)").eq("student_id", studentId).eq("status", "active"),
-    supabase.from("parent_students").select("id, relationship, guardians(full_name, phone)").eq("student_id", studentId),
-  ]);
+  type S = Pick<Tables<"students">, "full_name" | "admission_no" | "date_of_birth" | "gender" | "blood_group" | "school_name" | "admission_date" | "address" | "city" | "status"> & {
+    classes: { name: string } | null;
+    academic_years: { name: string } | null;
+  };
+  const { s, batches, parents } = await api<{
+    s: S | null;
+    batches: { id: string; start_date: string; status: string; batches: { name: string } | null }[];
+    parents: { id: string; relationship: string; guardians: { full_name: string; phone: string } | null }[];
+  }>(`/family/students/${encodeURIComponent(studentId)}/details`);
   if (!s) return null;
   return (
     <Card>

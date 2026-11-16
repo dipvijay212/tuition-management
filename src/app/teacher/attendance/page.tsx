@@ -9,7 +9,8 @@ import {
   CalendarCheck,
 } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -25,65 +26,32 @@ export const metadata: Metadata = { title: "Session Attendance" };
 export default async function TeacherAttendancePage(props: PageProps<"/teacher/attendance">) {
   await requireRole("teacher");
   const sp = await props.searchParams;
-  const supabase = await createClient();
   const today = todayIn();
 
-  const { page, pageSize, from, to } = pageParams(sp);
+  const { page, pageSize } = pageParams(sp);
   const selectedBatchFilter = str(sp.batch);
   const selectedDateFilter = str(sp.date);
 
-  // Sessions are scoped to the teacher's active assignments through an inner join, so all three
-  // queries run in parallel (one round trip) and attendance counts arrive embedded with each session.
-  const ASSIGNED = "batches!inner(teacher_batches!inner(is_active))";
-  let historyQuery = supabase
-    .from("class_sessions")
-    .select(
-      `id, batch_id, session_date, start_time, end_time, room, status, attendance_submitted_at, batches(id, name), subjects(name), attendance(status), assigned:${ASSIGNED}`,
-      { count: "exact" }
-    )
-    .eq("assigned.teacher_batches.is_active", true)
-    .lte("session_date", today)
-    .order("session_date", { ascending: false })
-    .range(from, to);
-  if (selectedBatchFilter) historyQuery = historyQuery.eq("batch_id", selectedBatchFilter);
-  if (selectedDateFilter) historyQuery = historyQuery.eq("session_date", selectedDateFilter);
+  type Att = { status: string }[];
+  type B = Pick<Tables<"batches">, "id" | "name" | "room" | "status" | "class_days" | "start_time" | "end_time" | "capacity"> & {
+    classes: { id: string; name: string } | null;
+    student_batches: { status: string }[];
+    batch_subjects: { subjects: { id: string; name: string } | null }[];
+  };
+  type TodayS = Pick<Tables<"class_sessions">, "id" | "batch_id" | "session_date" | "attendance_submitted_at" | "status"> & { attendance: Att };
+  type HistS = Pick<Tables<"class_sessions">, "id" | "batch_id" | "session_date" | "start_time" | "end_time" | "room" | "status" | "attendance_submitted_at"> & {
+    batches: { id: string; name: string } | null;
+    subjects: { name: string } | null;
+    attendance: Att;
+  };
+  const data = await api<{ batches: B[]; todaySessions: TodayS[]; history: { rows: HistS[]; count: number } }>("/attendance/teacher", {
+    query: { page, pageSize, batch: selectedBatchFilter, date: selectedDateFilter },
+  });
+  const todaySessions = data.todaySessions;
+  const historySessions = data.history.rows;
+  const historyCount = data.history.count;
 
-  const [
-    { data: assignments, error: batchError },
-    { data: todaySessions },
-    { data: historySessions, count: historyCount, error: historyError },
-  ] = await Promise.all([
-    // 1. Active batches assigned to this teacher
-    supabase
-      .from("teacher_batches")
-      .select(`
-        batches!inner(
-          id, name, room, status, class_days, start_time, end_time, capacity,
-          classes(id, name),
-          student_batches(status),
-          batch_subjects(subjects(id, name))
-        )
-      `)
-      .eq("is_active", true)
-      .eq("batches.status", "active"),
-    // 2. Today's sessions for those batches
-    supabase
-      .from("class_sessions")
-      .select(`id, batch_id, session_date, attendance_submitted_at, status, attendance(status), assigned:${ASSIGNED}`)
-      .eq("assigned.teacher_batches.is_active", true)
-      .eq("session_date", today),
-    // 3. Attendance history (sessions up to today)
-    historyQuery,
-  ]);
-
-  if (batchError) throw batchError;
-  if (historyError) throw historyError;
-
-  const seenBatches = new Set<string>();
-  const batches = (assignments ?? [])
-    .map((a) => a.batches)
-    .filter((b) => b && !seenBatches.has(b.id) && seenBatches.add(b.id))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const batches = data.batches;
 
   // Collect unique subjects for the dialog
   const subjectMap = new Map<string, { id: string; name: string }>();

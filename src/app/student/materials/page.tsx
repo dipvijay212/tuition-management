@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { FileText } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { familyMaterials, myStudent } from "@/features/family/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { MaterialDownloadButton } from "@/features/materials/material-actions";
@@ -11,8 +11,6 @@ export const metadata: Metadata = { title: "Study Materials & Notes" };
 
 export default async function StudentMaterialsPage() {
   const session = await requireRole("student");
-  const supabase = await createClient();
-
   if (!session.institute) {
     return (
       <div className="space-y-4">
@@ -22,15 +20,7 @@ export default async function StudentMaterialsPage() {
     );
   }
 
-  // Find student ID, class, and active batch enrolments
-  const { data: student } = await supabase
-    .from("students")
-    .select("id, class_id, student_batches(batch_id, status)")
-    .eq("profile_id", session.userId)
-    .eq("institute_id", session.institute.id)
-    .limit(1)
-    .maybeSingle();
-
+  const [student, materials] = await Promise.all([myStudent(), familyMaterials()]);
   if (!student) {
     return (
       <div className="space-y-4">
@@ -39,27 +29,6 @@ export default async function StudentMaterialsPage() {
       </div>
     );
   }
-
-  const activeBatchIds = (student.student_batches ?? [])
-    .filter((b) => b.status === "active")
-    .map((b) => b.batch_id);
-
-  let q = supabase
-    .from("study_materials")
-    .select(
-      "id, title, description, file_path, mime_type, size_bytes, created_at, classes(name), batches(name), subjects(name)"
-    )
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
-
-  if (student.class_id && activeBatchIds.length > 0) {
-    q = q.or(`class_id.eq.${student.class_id},batch_id.in.(${activeBatchIds.join(",")})`);
-  } else if (student.class_id) {
-    q = q.eq("class_id", student.class_id);
-  }
-
-  const { data: materials, error } = await q;
-  if (error) throw error;
 
   return (
     <div className="space-y-6">

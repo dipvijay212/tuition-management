@@ -1,26 +1,21 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { api } from "@/lib/api/server";
 import { assertRole } from "@/lib/auth/session";
-import { provisionAccount } from "@/lib/auth/provision";
 import { friendlyError, type ActionResult } from "@/lib/utilities/errors";
-import { check, makeAction } from "@/lib/utilities/action";
+import { makeAction } from "@/lib/utilities/action";
 import { fieldErrors, optionalEmail, optionalPhone, optionalText, requiredText } from "@/lib/validations/common";
-import { safeFileName, validateUpload } from "@/lib/supabase/storage";
 import { admissionSchema, type AdmissionInput } from "./schema";
 import { todayIn } from "@/lib/utilities/format";
 
 export async function admitStudent(input: AdmissionInput): Promise<ActionResult<{ id: string; admission_no: string; notes: string[] }>> {
-  let ctx;
-  try { ctx = await assertRole("admin"); } catch (e) { return { ok: false, error: (e as Error).message }; }
+  try { await assertRole("admin"); } catch (e) { return { ok: false, error: (e as Error).message }; }
   const parsed = admissionSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message, fieldErrors: fieldErrors(parsed.error) };
   const v = parsed.data;
   if (v.guardians.filter((g) => g.is_primary).length !== 1) return { ok: false, error: "Mark exactly one parent/guardian as primary contact." };
 
-  const supabase = await createClient();
   const payload = {
     student: {
       full_name: v.full_name, date_of_birth: v.date_of_birth || null, gender: v.gender || null, blood_group: v.blood_group || null,
@@ -32,97 +27,17 @@ export async function admitStudent(input: AdmissionInput): Promise<ActionResult<
     batch_ids: v.batch_ids,
     capacity_override_reason: v.capacity_override_reason || null,
     fees: v.fees.map((f) => ({ ...f, fee_structure_id: f.fee_structure_id || null, discount_id: f.discount_id || null, discount_reason: f.discount_reason || null })),
+    create_parent_login: !!v.create_parent_login,
+    create_student_login: !!v.create_student_login,
   };
-  const { data, error } = await supabase.rpc("admit_student", { p: payload });
-  if (error) return { ok: false, error: friendlyError(error) };
-  const result = data as { student_id: string; admission_no: string; obligations_created: number };
-
-  // Account invitations (after the admission transaction committed; failures don't undo the admission).
-  const notes: string[] = [];
-  if (result.obligations_created) notes.push(`${result.obligations_created} fee installment(s) created`);
-  const primary = v.guardians.find((g) => g.is_primary)!;
-  if (v.create_parent_login) {
-    if (!primary.email) notes.push("Parent login not created: primary parent has no email");
-    else {
-      try {
-        const acc = await provisionAccount(ctx, { email: primary.email, phone: primary.phone, fullName: primary.full_name, role: "parent", mode: "invite" });
-        const admin = createAdminClient();
-        await admin.from("guardians").update({ profile_id: acc.userId }).eq("institute_id", ctx.institute!.id).eq("phone", primary.phone);
-        notes.push(acc.invited ? "Parent invitation emailed" : "Linked to the parent's existing login");
-      } catch (e) { notes.push(`Parent login not created: ${(e as Error).message}`); }
-    }
-  }
-  if (v.create_student_login) {
-    if (!v.email) notes.push("Student login not created: student has no email");
-    else {
-      try {
-        const acc = await provisionAccount(ctx, { email: v.email, phone: v.phone || null, fullName: v.full_name, role: "student", mode: "invite" });
-        await createAdminClient().from("students").update({ profile_id: acc.userId }).eq("id", result.student_id);
-        notes.push(acc.invited ? "Student invitation emailed" : "Linked to the student's existing login");
-      } catch (e) { notes.push(`Student login not created: ${(e as Error).message}`); }
-    }
-  }
-
-  // Safe background trigger for admission confirmation email
   try {
-    const welcomeRecipients: string[] = [];
-    if (v.email) welcomeRecipients.push(v.email);
-    if (primary.email && !welcomeRecipients.includes(primary.email)) {
-      welcomeRecipients.push(primary.email);
-    }
-
-    if (welcomeRecipients.length > 0) {
-      const { data: stSettings } = await supabase
-        .from("institute_settings")
-        .select("email_enabled")
-        .eq("institute_id", ctx.institute!.id)
-        .maybeSingle();
-
-      if (stSettings?.email_enabled) {
-        const { renderAdmissionWelcomeEmail, sendEmail } = await import("@/lib/email");
-        let className: string | null = null;
-        if (v.class_id) {
-          const { data: c } = await supabase.from("classes").select("name").eq("id", v.class_id).maybeSingle();
-          className = c?.name ?? null;
-        }
-
-        let batchNames: string[] = [];
-        if (v.batch_ids && v.batch_ids.length > 0) {
-          const { data: bList } = await supabase.from("batches").select("name").in("id", v.batch_ids);
-          batchNames = (bList ?? []).map((b) => b.name);
-        }
-
-        const { data: instData } = await supabase
-          .from("institutes")
-          .select("phone, email")
-          .eq("id", ctx.institute!.id)
-          .maybeSingle();
-
-        const tpl = renderAdmissionWelcomeEmail({
-          instituteName: ctx.institute?.name,
-          institutePhone: instData?.phone ?? null,
-          instituteEmail: instData?.email ?? null,
-          studentName: v.full_name,
-          admissionNo: result.admission_no,
-          className,
-          batchNames,
-        });
-
-        await sendEmail({
-          to: welcomeRecipients,
-          subject: tpl.subject,
-          html: tpl.html,
-          text: tpl.text,
-          instituteId: ctx.institute?.id,
-        });
-      }
-    }
-  } catch (emailErr) {
-    console.error("[Admission Welcome Email Trigger Failed]", emailErr);
+    // The backend admits in one transaction, then sends invitations and the welcome email.
+    const r = await api<{ message: string; id: string; admission_no: string; notes: string[] }>("/students/admit", { method: "POST", body: payload });
+    revalidatePath("/admin/students");
+    return { ok: true, message: r.message, data: { id: r.id, admission_no: r.admission_no, notes: r.notes } };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e) };
   }
-
-  revalidatePath("/admin/students");
-  return { ok: true, message: `Admitted with number ${result.admission_no}`, data: { id: result.student_id, admission_no: result.admission_no, notes } };
 }
 
 export const updateStudent = makeAction({
@@ -135,13 +50,8 @@ export const updateStudent = makeAction({
     school_name: optionalText, class_id: z.string().optional(), subject_ids: z.array(z.uuid()), previous_academics: optionalText,
   }),
   handler: async (v) => {
-    const supabase = await createClient();
     const { id, ...rest } = v;
-    check(await supabase.from("students").update({
-      ...rest, date_of_birth: rest.date_of_birth ?? null, gender: rest.gender || null, blood_group: rest.blood_group ?? null, phone: rest.phone ?? null,
-      email: rest.email ?? null, address: rest.address ?? null, city: rest.city ?? null, state: rest.state ?? null, pin_code: rest.pin_code || null,
-      school_name: rest.school_name ?? null, class_id: rest.class_id || null, previous_academics: rest.previous_academics ?? null,
-    }).eq("id", id));
+    await api(`/students/${encodeURIComponent(id)}`, { method: "PATCH", body: rest });
     revalidatePath(`/admin/students/${id}`);
     return { ok: true, message: "Student updated" };
   },
@@ -150,8 +60,7 @@ export const updateStudent = makeAction({
 export async function changeStudentStatus(studentId: string, status: "active" | "inactive" | "on_hold" | "discontinued" | "completed", reason: string): Promise<ActionResult> {
   try {
     await assertRole("admin");
-    const supabase = await createClient();
-    check(await supabase.rpc("change_student_status", { p_student: studentId, p_status: status, p_reason: reason }));
+    await api(`/students/${encodeURIComponent(studentId)}/status`, { method: "POST", body: { status, reason } });
     revalidatePath(`/admin/students/${studentId}`);
     return { ok: true, message: "Status updated" };
   } catch (e) { return { ok: false, error: friendlyError(e) }; }
@@ -160,8 +69,7 @@ export async function changeStudentStatus(studentId: string, status: "active" | 
 export async function transferStudent(enrolmentId: string, toBatch: string, date: string, reason: string, override?: string): Promise<ActionResult> {
   try {
     await assertRole("admin");
-    const supabase = await createClient();
-    check(await supabase.rpc("transfer_student_batch", { p_enrolment: enrolmentId, p_to_batch: toBatch, p_date: date, p_reason: reason, p_capacity_override: override || undefined }));
+    await api(`/students/enrolments/${encodeURIComponent(enrolmentId)}/transfer`, { method: "POST", body: { to_batch: toBatch, date, reason, override: override || null } });
     revalidatePath("/admin/students", "layout");
     return { ok: true, message: "Student transferred" };
   } catch (e) { return { ok: false, error: friendlyError(e) }; }
@@ -169,19 +77,16 @@ export async function transferStudent(enrolmentId: string, toBatch: string, date
 
 export async function uploadStudentDocument(form: FormData): Promise<ActionResult> {
   try {
-    const ctx = await assertRole("admin");
+    await assertRole("admin");
     const studentId = String(form.get("student_id"));
     const title = String(form.get("title") ?? "").trim();
     const file = form.get("file");
     if (!title) return { ok: false, error: "Enter a document title." };
     if (!(file instanceof File)) return { ok: false, error: "Choose a file." };
-    const supabase = await createClient();
-    const { data: s } = await supabase.from("institute_settings").select("max_upload_mb").single();
-    const err = validateUpload(file, s?.max_upload_mb ?? 10, ["application/pdf", "image/png", "image/jpeg", "image/webp"]);
-    if (err) return { ok: false, error: err };
-    const path = `${ctx.institute!.id}/students/${studentId}/${safeFileName(file.name)}`;
-    check(await supabase.storage.from("files").upload(path, file, { contentType: file.type }));
-    check(await supabase.from("student_documents").insert({ institute_id: ctx.institute!.id, student_id: studentId, title, file_path: path, mime_type: file.type, size_bytes: file.size, uploaded_by: ctx.userId }));
+    const body = new FormData();
+    body.set("data", JSON.stringify({ title }));
+    body.set("file", file);
+    await api(`/students/${encodeURIComponent(studentId)}/documents`, { method: "POST", form: body });
     revalidatePath(`/admin/students/${studentId}`);
     return { ok: true, message: "Document uploaded" };
   } catch (e) { return { ok: false, error: friendlyError(e) }; }
@@ -189,16 +94,13 @@ export async function uploadStudentDocument(form: FormData): Promise<ActionResul
 
 export async function uploadStudentPhoto(form: FormData): Promise<ActionResult> {
   try {
-    const ctx = await assertRole("admin");
+    await assertRole("admin");
     const studentId = String(form.get("student_id"));
     const file = form.get("file");
     if (!(file instanceof File)) return { ok: false, error: "Choose a photo." };
-    const err = validateUpload(file, 2, ["image/png", "image/jpeg", "image/webp"]);
-    if (err) return { ok: false, error: err };
-    const supabase = await createClient();
-    const path = `${ctx.institute!.id}/students/${studentId}/photo-${safeFileName(file.name)}`;
-    check(await supabase.storage.from("files").upload(path, file, { contentType: file.type }));
-    check(await supabase.from("students").update({ photo_path: path }).eq("id", studentId));
+    const body = new FormData();
+    body.set("file", file);
+    await api(`/students/${encodeURIComponent(studentId)}/photo`, { method: "POST", form: body });
     revalidatePath(`/admin/students/${studentId}`);
     return { ok: true, message: "Photo updated" };
   } catch (e) { return { ok: false, error: friendlyError(e) }; }
@@ -206,141 +108,10 @@ export async function uploadStudentPhoto(form: FormData): Promise<ActionResult> 
 
 export async function createFamilyLogin(kind: "student" | "parent", id: string): Promise<ActionResult> {
   try {
-    const ctx = await assertRole("admin");
-    const supabase = await createClient();
-    const admin = createAdminClient();
-    const inst = ctx.institute!.id;
-    const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3100";
-    const redirectTo = `${site}/auth/callback?next=/reset-password`;
-
-    if (kind === "student") {
-      const { data: s } = await supabase.from("students").select("id, full_name, email, phone, profile_id").eq("id", id).single();
-      if (!s) return { ok: false, error: "Student not found." };
-      if (!s.email) return { ok: false, error: "Add the student's email first." };
-
-      if (!s.profile_id) {
-        const acc = await provisionAccount(ctx, { email: s.email, phone: s.phone, fullName: s.full_name, role: "student", mode: "invite" });
-        await admin.from("students").update({ profile_id: acc.userId }).eq("id", id);
-        revalidatePath(`/admin/students/${id}`);
-        return { ok: true, message: `Invitation sent to ${s.email}!` };
-      }
-
-      // Profile already linked: generate link and send/resend email
-      let actionLink: string | null = null;
-      const linkRes = await admin.auth.admin.generateLink({
-        type: "magiclink",
-        email: s.email,
-        options: { data: { full_name: s.full_name }, redirectTo },
-      });
-
-      const props = linkRes.data?.properties;
-      if (linkRes.error || !props?.action_link) {
-        const recRes = await admin.auth.admin.generateLink({
-          type: "recovery",
-          email: s.email,
-          options: { redirectTo },
-        });
-        const recProps = recRes.data?.properties;
-        if (recRes.error || !recProps?.action_link) {
-          return { ok: false, error: linkRes.error?.message ?? recRes.error?.message ?? "Could not generate invitation link." };
-        }
-        actionLink = recProps.hashed_token
-          ? `${site}/auth/callback?token_hash=${recProps.hashed_token}&type=recovery&next=/reset-password`
-          : recProps.action_link;
-      } else {
-        actionLink = props.hashed_token
-          ? `${site}/auth/callback?token_hash=${props.hashed_token}&type=recovery&next=/reset-password`
-          : props.action_link;
-      }
-
-      const { renderInvitationEmail, sendEmail } = await import("@/lib/email");
-      const tpl = renderInvitationEmail({
-        instituteName: ctx.institute?.name,
-        recipientName: s.full_name,
-        recipientEmail: s.email,
-        role: "student",
-        actionLink,
-      });
-
-      const sendRes = await sendEmail({
-        to: s.email,
-        subject: tpl.subject,
-        html: tpl.html,
-        text: tpl.text,
-        instituteId: inst,
-      });
-
-      if (!sendRes.ok) {
-        return { ok: false, error: `Email dispatch failed: ${sendRes.error}` };
-      }
-
-      revalidatePath(`/admin/students/${id}`);
-      return { ok: true, message: `Invitation emailed to ${s.email}!` };
-    }
-
-    // Parent / Guardian
-    const { data: g } = await supabase.from("guardians").select("id, full_name, email, phone, profile_id").eq("id", id).single();
-    if (!g) return { ok: false, error: "Parent not found." };
-    if (!g.email) return { ok: false, error: "Add the parent's email first." };
-
-    if (!g.profile_id) {
-      const acc = await provisionAccount(ctx, { email: g.email, phone: g.phone, fullName: g.full_name, role: "parent", mode: "invite" });
-      await admin.from("guardians").update({ profile_id: acc.userId }).eq("id", id);
-      revalidatePath("/admin/students", "layout");
-      return { ok: true, message: `Invitation sent to ${g.email}!` };
-    }
-
-    // Parent already linked: generate link and send/resend email
-    let actionLink: string | null = null;
-    const linkRes = await admin.auth.admin.generateLink({
-      type: "magiclink",
-      email: g.email,
-      options: { data: { full_name: g.full_name }, redirectTo },
-    });
-
-    const props = linkRes.data?.properties;
-    if (linkRes.error || !props?.action_link) {
-      const recRes = await admin.auth.admin.generateLink({
-        type: "recovery",
-        email: g.email,
-        options: { redirectTo },
-      });
-      const recProps = recRes.data?.properties;
-      if (recRes.error || !recProps?.action_link) {
-        return { ok: false, error: linkRes.error?.message ?? recRes.error?.message ?? "Could not generate invitation link." };
-      }
-      actionLink = recProps.hashed_token
-        ? `${site}/auth/callback?token_hash=${recProps.hashed_token}&type=recovery&next=/reset-password`
-        : recProps.action_link;
-    } else {
-      actionLink = props.hashed_token
-        ? `${site}/auth/callback?token_hash=${props.hashed_token}&type=recovery&next=/reset-password`
-        : props.action_link;
-    }
-
-    const { renderInvitationEmail, sendEmail } = await import("@/lib/email");
-    const tpl = renderInvitationEmail({
-      instituteName: ctx.institute?.name,
-      recipientName: g.full_name,
-      recipientEmail: g.email,
-      role: "parent",
-      actionLink,
-    });
-
-    const sendRes = await sendEmail({
-      to: g.email,
-      subject: tpl.subject,
-      html: tpl.html,
-      text: tpl.text,
-      instituteId: inst,
-    });
-
-    if (!sendRes.ok) {
-      return { ok: false, error: `Email dispatch failed: ${sendRes.error}` };
-    }
-
-    revalidatePath("/admin/students", "layout");
-    return { ok: true, message: `Invitation emailed to ${g.email}!` };
+    await assertRole("admin");
+    const r = await api<{ message: string }>("/students/family-login", { method: "POST", body: { kind, id } });
+    revalidatePath(kind === "student" ? `/admin/students/${id}` : "/admin/students", kind === "student" ? undefined : "layout");
+    return { ok: true, message: r.message };
   } catch (e) { return { ok: false, error: friendlyError(e) }; }
 }
 
@@ -348,8 +119,7 @@ export const saveGuardian = makeAction({
   roles: ["admin"],
   schema: z.object({ id: z.uuid(), full_name: requiredText("Name", 100), alt_phone: optionalPhone, email: optionalEmail }),
   handler: async (v) => {
-    const supabase = await createClient();
-    check(await supabase.from("guardians").update({ full_name: v.full_name, alt_phone: v.alt_phone ?? null, email: v.email ?? null }).eq("id", v.id));
+    await api(`/students/guardians/${encodeURIComponent(v.id)}`, { method: "PATCH", body: { full_name: v.full_name, alt_phone: v.alt_phone ?? null, email: v.email ?? null } });
     revalidatePath("/admin/students", "layout");
     return { ok: true, message: "Parent details updated" };
   },

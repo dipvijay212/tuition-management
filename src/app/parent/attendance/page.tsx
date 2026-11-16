@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { familyAttendance } from "@/features/family/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatCard } from "@/components/shared/stat-card";
@@ -12,14 +12,7 @@ export const metadata: Metadata = { title: "Children Attendance" };
 
 export default async function ParentAttendancePage() {
   await requireRole("parent");
-  const supabase = await createClient();
-
-  const { data: records, error } = await supabase
-    .from("attendance")
-    .select("id, session_date, status, remarks, students(full_name), batches(name)")
-    .order("session_date", { ascending: false });
-
-  if (error) throw error;
+  const records = await familyAttendance();
 
   const total = records?.length ?? 0;
   const present = records?.filter((r) => r.status === "present").length ?? 0;

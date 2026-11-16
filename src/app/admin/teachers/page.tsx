@@ -2,26 +2,23 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { FilterBar, SearchInput, SelectFilter } from "@/components/shared/filters";
 import { Button } from "@/components/ui/button";
-import { likeTerm, pageParams, str } from "@/lib/utilities/query";
+import { pageParams, str } from "@/lib/utilities/query";
 
 export const metadata: Metadata = { title: "Teachers" };
 
 export default async function TeachersPage(props: PageProps<"/admin/teachers">) {
   await requireRole("admin");
   const sp = await props.searchParams;
-  const { page, pageSize, from, to } = pageParams(sp);
-  const supabase = await createClient();
-  let q = supabase.from("teachers").select("id, full_name, phone, email, specialization, employment_status, profile_id, teacher_batches(count)", { count: "exact" }).order("full_name").range(from, to);
-  if (str(sp.q)) { const t = likeTerm(str(sp.q)!); q = q.or(`full_name.ilike.${t},phone.ilike.${t},email.ilike.${t}`); }
-  if (str(sp.status)) q = q.eq("employment_status", str(sp.status) as "active");
-  const { data, count, error } = await q;
-  if (error) throw error;
+  const { page, pageSize } = pageParams(sp);
+  type Row = Pick<Tables<"teachers">, "id" | "full_name" | "phone" | "email" | "specialization" | "employment_status" | "profile_id"> & { teacher_batches: { count: number }[] };
+  const { rows: data, count } = await api<{ rows: Row[]; count: number }>("/teachers", { query: { page, pageSize, q: str(sp.q), status: str(sp.status) } });
   return (
     <>
       <PageHeader title="Teachers" description="Teacher profiles, subjects, batches and login access." actions={<Button nativeButton={false} render={<Link href="/admin/teachers/new" />}><Plus /> Add teacher</Button>} />

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { familyFees } from "@/features/family/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -11,18 +11,8 @@ export const metadata: Metadata = { title: "Fees & Payments" };
 
 export default async function ParentFeesPage() {
   await requireRole("parent");
-  const supabase = await createClient();
-
-  const [{ data: obligations, error: oErr }, { data: payments, error: pErr }] = await Promise.all([
-    supabase
-      .from("fee_obligations")
-      .select("id, description, due_date, net_amount, amount_paid, status, students(full_name)")
-      .order("due_date", { ascending: true }),
-    supabase
-      .from("payments")
-      .select("id, amount, payment_date, method, reference, status, students(full_name, admission_no), receipts(receipt_no)")
-      .order("payment_date", { ascending: false }),
-  ]);
+  const { obligations, payments } = await familyFees();
+  const oErr = null, pErr = null;
 
   if (oErr) throw oErr;
   if (pErr) throw pErr;

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { formatDate, formatTime, DAYS } from "@/lib/utilities/format";
@@ -11,15 +12,10 @@ export const metadata: Metadata = { title: "Batch" };
 export default async function TeacherBatchPage(props: PageProps<"/teacher/batches/[id]">) {
   await requireRole("teacher");
   const { id } = await props.params;
-  const supabase = await createClient();
-  // RLS: only students in this teacher's batches are returned.
-  // The assignment check and the data load run in parallel; nothing renders unless the check passes.
-  const [{ data: tb }, { data: b }, { data: rows }] = await Promise.all([
-    supabase.from("teacher_batches").select("id").eq("batch_id", id).eq("is_active", true).limit(1).maybeSingle(),
-    supabase.from("batches").select("name, class_days, start_time, end_time, room, classes(name)").eq("id", id).maybeSingle(),
-    supabase.from("student_batches").select("id, start_date, students(id, full_name, admission_no, phone)").eq("batch_id", id).eq("status", "active").order("start_date"),
-  ]);
-  if (!tb) notFound();
+  // The backend only returns batches this teacher is assigned to.
+  type Batch = Pick<Tables<"batches">, "name" | "class_days" | "start_time" | "end_time" | "room"> & { classes: { name: string } | null };
+  type Row = { id: string; start_date: string; students: Pick<Tables<"students">, "id" | "full_name" | "admission_no" | "phone"> | null };
+  const { batch: b, rows } = await api<{ batch: Batch | null; rows: Row[] }>(`/batches/mine/${encodeURIComponent(id)}`).catch(() => ({ batch: null, rows: [] as Row[] }));
   if (!b) notFound();
   return (
     <>

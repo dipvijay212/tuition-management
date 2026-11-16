@@ -1,37 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { applyRememberPolicy, REMEMBER_COOKIE } from "@/lib/supabase/cookies";
 
-const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password", "/auth", "/setup", "/api/cron", "/offline"];
+const SESSION_COOKIE = "tc_session";
 const PORTALS = ["/admin", "/teacher", "/student", "/parent"];
 
 /**
- * Optimistic check only: refreshes the Supabase session cookie and bounces
- * signed-out users to /login. Real authorization happens in each portal
- * layout (requireRole) and in Postgres RLS.
+ * Optimistic check only (no network call): bounces visitors without a session
+ * cookie to /login. Real authorization happens in each portal layout
+ * (requireRole) and in the backend API on every request.
  */
-export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
-  const remember = request.cookies.get(REMEMBER_COOKIE)?.value !== "0";
-
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet, headers) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, applyRememberPolicy(name, options, remember)),
-        );
-        Object.entries(headers ?? {}).forEach(([k, v]) => response.headers.set(k, v));
-      },
-    },
-  });
-
-  const { data } = await supabase.auth.getClaims();
-  const signedIn = !!data?.claims?.sub;
+export function proxy(request: NextRequest) {
+  const signedIn = !!request.cookies.get(SESSION_COOKIE)?.value;
   const path = request.nextUrl.pathname;
 
   if (!signedIn && PORTALS.some((p) => path === p || path.startsWith(p + "/"))) {
@@ -40,18 +18,7 @@ export async function proxy(request: NextRequest) {
     url.searchParams.set("next", path);
     return NextResponse.redirect(url);
   }
-  if (signedIn && path === "/login") {
-    // If redirected to /login with an error, do NOT loop back to /
-    if (request.nextUrl.searchParams.has("error")) {
-      return response;
-    }
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-  void PUBLIC_PATHS;
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {

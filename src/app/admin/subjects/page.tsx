@@ -1,27 +1,22 @@
 import type { Metadata } from "next";
 import { Plus } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { FilterBar, SearchInput, SelectFilter } from "@/components/shared/filters";
 import { Button } from "@/components/ui/button";
 import { SubjectDialog } from "@/features/academics/forms";
-import { likeTerm, str } from "@/lib/utilities/query";
+import { str } from "@/lib/utilities/query";
 
 export const metadata: Metadata = { title: "Subjects" };
 
 export default async function SubjectsPage(props: PageProps<"/admin/subjects">) {
   await requireRole("admin");
   const sp = await props.searchParams;
-  const supabase = await createClient();
-  let q = supabase.from("subjects").select("id, name, code, class_id, description, status, classes(name)").order("name");
-  if (str(sp.q)) q = q.or(`name.ilike.${likeTerm(str(sp.q)!)},code.ilike.${likeTerm(str(sp.q)!)}`);
-  if (str(sp.class)) q = q.eq("class_id", str(sp.class)!);
-  if (str(sp.status)) q = q.eq("status", str(sp.status) as "active" | "inactive");
-  const [{ data: rows, error }, { data: classes }] = await Promise.all([q, supabase.from("classes").select("id, name").order("sort_order").order("name")]);
-  if (error) throw error;
+  type Row = { id: string; name: string; code: string | null; class_id: string | null; description: string | null; status: "active" | "inactive"; classes: { name: string } | null };
+  const { rows, classes } = await api<{ rows: Row[]; classes: { id: string; name: string }[] }>("/academics/subjects", { query: { q: str(sp.q), class: str(sp.class), status: str(sp.status) } });
   const classOpts = classes ?? [];
   return (
     <>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bell, CheckCheck } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
+import { markAllRead as markAllReadAction, markRead, recentNotifications } from "@/features/notifications/actions";
 import type { AppRole } from "@/lib/auth/session";
 import { resolveNotificationLink } from "@/lib/utilities/links";
 
@@ -27,25 +27,23 @@ export function NotificationBell({ role, initialUnread }: { role: AppRole; initi
   const router = useRouter();
 
   const load = useCallback(async () => {
-    const supabase = createClient();
-    const { data, error } = await supabase.from("notifications").select("id, title, body, link, read_at, created_at").order("created_at", { ascending: false }).limit(8);
-    if (error) return setError(true);
+    const r = await recentNotifications();
+    if (!r.ok) return setError(true);
     setError(false);
-    setItems(data);
+    setItems(r.items);
   }, []);
 
   const onOpenChange = (o: boolean) => { setOpen(o); if (o) void load(); };
 
   const markAll = async () => {
-    const supabase = createClient();
-    await supabase.from("notifications").update({ read_at: new Date().toISOString() }).is("read_at", null);
+    await markAllReadAction();
     setUnread(0);
     setItems((xs) => xs?.map((x) => ({ ...x, read_at: x.read_at ?? new Date().toISOString() })) ?? null);
     router.refresh();
   };
   const openItem = async (n: N) => {
     if (!n.read_at) {
-      await createClient().from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id);
+      await markRead(n.id).catch(() => {});
       setUnread((u) => Math.max(0, u - 1));
     }
     setOpen(false);

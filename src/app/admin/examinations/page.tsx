@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -15,24 +16,11 @@ export const metadata: Metadata = { title: "Examinations" };
 export default async function AdminExaminationsPage(props: PageProps<"/admin/examinations">) {
   await requireRole("admin");
   const sp = await props.searchParams;
-  const { page, pageSize, from, to } = pageParams(sp);
-  const supabase = await createClient();
-
-  let q = supabase
-    .from("examinations")
-    .select("id, name, exam_type, start_date, end_date, status, classes(name), batches(name)", { count: "exact" })
-    .order("start_date", { ascending: false })
-    .range(from, to);
-
-  if (str(sp.status)) q = q.eq("status", str(sp.status) as "scheduled");
-
-  const [{ data, count, error }, { data: classes }, { data: batches }] = await Promise.all([
-    q,
-    supabase.from("classes").select("id, name").order("name"),
-    supabase.from("batches").select("id, name").eq("status", "active").order("name"),
-  ]);
-
-  if (error) throw error;
+  const { page, pageSize } = pageParams(sp);
+  type Row = Pick<Tables<"examinations">, "id" | "name" | "exam_type" | "start_date" | "end_date" | "status"> & { classes: { name: string } | null; batches: { name: string } | null };
+  const { rows: data, count, classes, batches } = await api<{ rows: Row[]; count: number; classes: { id: string; name: string }[]; batches: { id: string; name: string }[] }>("/exams", {
+    query: { page, pageSize, status: str(sp.status) },
+  });
 
   const actions = <NewExamDialog classes={classes ?? []} batches={batches ?? []} />;
 

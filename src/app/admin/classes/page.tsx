@@ -2,36 +2,22 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus, Layers, Users, BookOpen } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { FilterBar, SearchInput, SelectFilter } from "@/components/shared/filters";
 import { Button } from "@/components/ui/button";
 import { ClassDialog } from "@/features/academics/forms";
-import { likeTerm, str } from "@/lib/utilities/query";
+import { str } from "@/lib/utilities/query";
 
 export const metadata: Metadata = { title: "Classes" };
 
 export default async function ClassesPage(props: PageProps<"/admin/classes">) {
   await requireRole("admin");
   const sp = await props.searchParams;
-  const supabase = await createClient();
-  let q = supabase
-    .from("classes")
-    .select("id, name, description, academic_year_id, sort_order, status, academic_years(name), batches(count), subjects(count), students(count)")
-    .order("sort_order")
-    .order("name");
-
-  if (str(sp.q)) q = q.ilike("name", likeTerm(str(sp.q)!));
-  if (str(sp.status)) q = q.eq("status", str(sp.status) as "active" | "inactive");
-
-  const [{ data: rows, error }, { data: years }] = await Promise.all([
-    q,
-    supabase.from("academic_years").select("id, name").order("start_date", { ascending: false }),
-  ]);
-
-  if (error) throw error;
+  type Row = { id: string; name: string; description: string | null; academic_year_id: string | null; sort_order: number; status: "active" | "inactive"; academic_years: { name: string } | null; batches: { count: number }[]; subjects: { count: number }[]; students: { count: number }[] };
+  const { rows, years } = await api<{ rows: Row[]; years: { id: string; name: string }[] }>("/academics/classes", { query: { q: str(sp.q), status: str(sp.status) } });
   const yearOpts = years ?? [];
   const count = (x: unknown) => (x as { count: number }[] | null)?.[0]?.count ?? 0;
 

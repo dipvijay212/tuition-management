@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
@@ -13,24 +14,16 @@ export const metadata: Metadata = { title: "New Admission" };
 
 export default async function NewStudentAdmissionPage() {
   const ctx = await requireRole("admin");
-  const supabase = await createClient();
-  const [
-    { data: classes },
-    { data: years },
-    { data: subjects },
-    { data: batches },
-    { data: structures },
-    { data: discounts },
-    { data: settings },
-  ] = await Promise.all([
-    supabase.from("classes").select("id, name").eq("status", "active").order("sort_order").order("name"),
-    supabase.from("academic_years").select("id, name").order("start_date", { ascending: false }),
-    supabase.from("subjects").select("id, name, class_id").eq("status", "active").order("name"),
-    supabase.from("batches").select("id, name, class_id, capacity, student_batches(status)").eq("status", "active").order("name"),
-    supabase.from("fee_structures").select("id, name, class_id, fee_type, category, total_amount, installments, default_due_day, discount_eligible").eq("status", "active").order("name"),
-    supabase.from("discounts").select("id, name, discount_type, value").eq("status", "active").order("name"),
-    supabase.from("institute_settings").select("default_due_day, current_academic_year_id").single(),
-  ]);
+  type Opts = {
+    classes: { id: string; name: string }[];
+    years: { id: string; name: string }[];
+    subjects: { id: string; name: string; class_id: string | null }[];
+    batches: { id: string; name: string; class_id: string; capacity: number | null; student_batches: { status: string }[] }[];
+    structures: Pick<Tables<"fee_structures">, "id" | "name" | "class_id" | "fee_type" | "category" | "total_amount" | "installments" | "default_due_day" | "discount_eligible">[];
+    discounts: Pick<Tables<"discounts">, "id" | "name" | "discount_type" | "value">[];
+    settings: { default_due_day: number; current_academic_year_id: string | null } | null;
+  };
+  const { classes, years, subjects, batches, structures, discounts, settings } = await api<Opts>("/students/admission-options");
 
   if (!classes?.length) {
     return (

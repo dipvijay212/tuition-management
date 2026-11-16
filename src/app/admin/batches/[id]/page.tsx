@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Pencil, Users, Clock, DoorOpen, CalendarRange } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { StatCard } from "@/components/shared/stat-card";
@@ -19,11 +20,16 @@ export const metadata: Metadata = { title: "Batch" };
 export default async function BatchPage(props: PageProps<"/admin/batches/[id]">) {
   const ctx = await requireRole("admin");
   const { id } = await props.params;
-  const supabase = await createClient();
-  const [{ data: b }, { data: enrolments }] = await Promise.all([
-    supabase.from("batches").select("*, classes(name), academic_years(name), teacher_batches(id, is_active, teachers(id, full_name)), batch_subjects(id, subjects(name))").eq("id", id).maybeSingle(),
-    supabase.from("student_batches").select("id, start_date, end_date, status, end_reason, capacity_override_reason, students(id, full_name, admission_no, status)").eq("batch_id", id).order("status").order("start_date", { ascending: false }),
-  ]);
+  type Batch = Tables<"batches"> & {
+    classes: { name: string } | null;
+    academic_years: { name: string } | null;
+    teacher_batches: { id: string; is_active: boolean; teachers: { id: string; full_name: string } | null }[];
+    batch_subjects: { id: string; subjects: { name: string } | null }[];
+  };
+  type Enrolment = Pick<Tables<"student_batches">, "id" | "start_date" | "end_date" | "status" | "end_reason" | "capacity_override_reason"> & {
+    students: Pick<Tables<"students">, "id" | "full_name" | "admission_no" | "status"> | null;
+  };
+  const { batch: b, enrolments } = await api<{ batch: Batch | null; enrolments: Enrolment[] }>(`/batches/${encodeURIComponent(id)}`).catch(() => ({ batch: null, enrolments: [] as Enrolment[] }));
   if (!b) notFound();
   const active = (enrolments ?? []).filter((e) => e.status === "active");
   const past = (enrolments ?? []).filter((e) => e.status !== "active");

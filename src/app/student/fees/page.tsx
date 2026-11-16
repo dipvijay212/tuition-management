@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { familyFees } from "@/features/family/data";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatCard } from "@/components/shared/stat-card";
@@ -12,14 +12,7 @@ export const metadata: Metadata = { title: "My Fees" };
 
 export default async function StudentFeesPage() {
   await requireRole("student");
-  const supabase = await createClient();
-
-  const { data: obligations, error } = await supabase
-    .from("fee_obligations")
-    .select("id, installment_no, category, description, due_date, gross_amount, discount_amount, net_amount, amount_paid, status")
-    .order("due_date", { ascending: true });
-
-  if (error) throw error;
+  const { obligations } = await familyFees();
 
   let totalNet = 0;
   let totalPaid = 0;

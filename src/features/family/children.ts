@@ -1,9 +1,7 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
+import { familyChildren } from "./data";
 
-/** Children linked to the signed-in parent (RLS-enforced). */
+/** Children linked to the signed-in parent (scoped by the backend). */
 export async function myChildren() {
-  const supabase = await createClient();
-  const { data } = await supabase.from("students").select("id, full_name, admission_no, status, classes(name)").order("full_name");
-  return data ?? [];
+  return familyChildren();
 }

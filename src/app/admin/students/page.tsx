@@ -2,14 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { UserPlus } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { FilterBar, SearchInput, SelectFilter } from "@/components/shared/filters";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utilities/format";
-import { likeTerm, pageParams, str } from "@/lib/utilities/query";
+import { pageParams, str } from "@/lib/utilities/query";
 
 export const metadata: Metadata = { title: "Students" };
 const STATUSES = ["active", "inactive", "on_hold", "discontinued", "completed"] as const;
@@ -17,24 +18,16 @@ const STATUSES = ["active", "inactive", "on_hold", "discontinued", "completed"] 
 export default async function StudentsPage(props: PageProps<"/admin/students">) {
   await requireRole("admin");
   const sp = await props.searchParams;
-  const { page, pageSize, from, to } = pageParams(sp);
-  const supabase = await createClient();
-
+  const { page, pageSize } = pageParams(sp);
   const batch = str(sp.batch);
-  let q = supabase.from("students")
-    .select(`id, full_name, admission_no, phone, status, admission_date, classes(name), parent_students(is_primary, guardians(full_name, phone)), student_batches${batch ? "!inner" : ""}(status, batch_id, batches(name))`, { count: "exact" })
-    .order("created_at", { ascending: false }).range(from, to);
-  if (str(sp.q)) { const t = likeTerm(str(sp.q)!); q = q.or(`full_name.ilike.${t},admission_no.ilike.${t},phone.ilike.${t}`); }
-  if (str(sp.class)) q = q.eq("class_id", str(sp.class)!);
-  if (str(sp.status)) q = q.eq("status", str(sp.status) as (typeof STATUSES)[number]);
-  if (batch) q = q.eq("student_batches.batch_id", batch).eq("student_batches.status", "active");
-
-  const [{ data, count, error }, { data: classes }, { data: batches }] = await Promise.all([
-    q,
-    supabase.from("classes").select("id, name").order("sort_order").order("name"),
-    supabase.from("batches").select("id, name").eq("status", "active").order("name"),
-  ]);
-  if (error) throw error;
+  type Row = Pick<Tables<"students">, "id" | "full_name" | "admission_no" | "phone" | "status" | "admission_date"> & {
+    classes: { name: string } | null;
+    parent_students: { is_primary: boolean; guardians: { full_name: string; phone: string } | null }[];
+    student_batches: { status: string; batch_id: string; batches: { name: string } | null }[];
+  };
+  const { rows: data, count, classes, batches } = await api<{ rows: Row[]; count: number; classes: { id: string; name: string }[]; batches: { id: string; name: string }[] }>("/students", {
+    query: { page, pageSize, q: str(sp.q), class: str(sp.class), status: str(sp.status), batch },
+  });
   const newBtn = <Button nativeButton={false} render={<Link href="/admin/students/new" />}><UserPlus /> New admission</Button>;
   return (
     <>

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -14,20 +15,13 @@ export const metadata: Metadata = { title: "Fees Management" };
 
 export default async function AdminFeesPage() {
   await requireRole("admin");
-  const supabase = await createClient();
-
-  const [{ data: structures, error: sErr }, { data: classes }, { data: allObligations }] = await Promise.all([
-    supabase
-      .from("fee_structures")
-      .select("id, name, fee_type, category, total_amount, installments, default_due_day, discount_eligible, status, classes(name)")
-      .order("name"),
-    supabase.from("classes").select("id, name").order("name"),
-    supabase
-      .from("fee_obligations")
-      .select("student_id, net_amount, amount_paid, status, students(id, full_name, admission_no, phone, classes(name))"),
-  ]);
-
-  if (sErr) throw sErr;
+  type Stu = { id: string; full_name: string; admission_no: string; phone: string | null; classes: { name: string } | null };
+  type Structure = Pick<Tables<"fee_structures">, "id" | "name" | "fee_type" | "category" | "total_amount" | "installments" | "default_due_day" | "discount_eligible" | "status"> & { classes: { name: string } | null };
+  const { structures, classes, obligations: allObligations } = await api<{
+    structures: Structure[];
+    classes: { id: string; name: string }[];
+    obligations: { student_id: string; net_amount: number; amount_paid: number; status: string; students: Stu | null }[];
+  }>("/fees/overview");
 
   // Aggregate total assigned fees, total paid, and net balance across ALL obligations per student
   const duesByStudent = new Map<

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CalendarCheck, Wallet, NotebookPen, Trophy } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,13 +18,8 @@ type F = {
 };
 
 export async function FamilyDashboard({ studentId, base, timezone, showName }: { studentId: string; base: "/student" | "/parent"; timezone: string; showName?: boolean }) {
-  const supabase = await createClient();
-  const [{ data, error }, { data: notes }] = await Promise.all([
-    supabase.rpc("family_dashboard", { p_student: studentId }),
-    supabase.from("notifications").select("id, title, body, created_at").order("created_at", { ascending: false }).limit(5),
-  ]);
-  if (error) throw new Error(error.message);
-  const d = data as unknown as F;
+  const { dashboard, notes } = await api<{ dashboard: F; notes: { id: string; title: string; body: string | null; created_at: string }[] }>(`/family/students/${encodeURIComponent(studentId)}/dashboard`);
+  const d = dashboard;
   return (
     <div className="space-y-6">
       {showName && <div className="flex items-center gap-2"><h2 className="text-lg font-semibold">{d.student.name}</h2><span className="text-sm text-muted-foreground">{d.student.admission_no}{d.student.class && ` · ${d.student.class}`}</span><StatusBadge status={d.student.status} /></div>}

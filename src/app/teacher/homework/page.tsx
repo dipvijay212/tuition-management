@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { NotebookPen, Check, AlertTriangle, X } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { FilterBar, SearchInput, SelectFilter } from "@/components/shared/filters";
@@ -9,52 +10,29 @@ import { AssignHomeworkDialog } from "@/features/homework/assign-dialog";
 import { CheckHomeworkDialog } from "@/features/homework/check-dialog";
 import { DeleteHomeworkButton } from "@/features/homework/homework-actions";
 import { formatDate, todayIn } from "@/lib/utilities/format";
-import { pageParams, str, likeTerm } from "@/lib/utilities/query";
+import { pageParams, str } from "@/lib/utilities/query";
 
 export const metadata: Metadata = { title: "Homework Management" };
 
 export default async function TeacherHomeworkPage(props: PageProps<"/teacher/homework">) {
   await requireRole("teacher");
   const sp = await props.searchParams;
-  const { page, pageSize, from, to } = pageParams(sp);
-  const supabase = await createClient();
+  const { page, pageSize } = pageParams(sp);
   const today = todayIn();
 
   const selectedBatch = str(sp.batch);
   const selectedSubject = str(sp.subject);
   const searchQ = str(sp.q);
-
-  // Homework is scoped to the teacher's active assignments with an inner join, so it loads in
-  // parallel with the batch list instead of waiting for batch ids (one round trip, not three).
-  let q = supabase
-    .from("homework")
-    .select(
-      "id, title, description, assigned_date, due_at, batch_id, subject_id, batches(id, name, classes(name)), subjects(id, name), homework_submissions(status), assigned:batches!inner(teacher_batches!inner(is_active))",
-      { count: "exact" }
-    )
-    .eq("assigned.teacher_batches.is_active", true)
-    .order("due_at", { ascending: false })
-    .range(from, to);
-
-  if (searchQ) q = q.ilike("title", likeTerm(searchQ));
-  if (selectedBatch) q = q.eq("batch_id", selectedBatch);
-  if (selectedSubject) q = q.eq("subject_id", selectedSubject);
-
-  const [{ data: assignments }, { data: homeworkList, count, error }] = await Promise.all([
-    supabase
-      .from("teacher_batches")
-      .select("batches!inner(id, name, classes(name), batch_subjects(subjects(id, name)))")
-      .eq("is_active", true)
-      .eq("batches.status", "active"),
-    q,
-  ]);
-  if (error) throw error;
-
-  const seen = new Set<string>();
-  const batches = (assignments ?? [])
-    .map((a) => a.batches)
-    .filter((b) => b && !seen.has(b.id) && seen.add(b.id))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  type HwRow = Pick<Tables<"homework">, "id" | "title" | "description" | "assigned_date" | "due_at" | "batch_id" | "subject_id"> & {
+    batches: { id: string; name: string; classes: { name: string } | null } | null;
+    subjects: { id: string; name: string } | null;
+    homework_submissions: { status: string }[];
+  };
+  type MyBatch = { id: string; name: string; class_id: string; classes: { id: string; name: string } | null; batch_subjects: { subjects: { id: string; name: string } | null }[] };
+  // The backend scopes homework to the teacher's assigned batches.
+  const { rows: homeworkList, count, batches } = await api<{ rows: HwRow[]; count: number; batches: MyBatch[] }>("/learning/homework", {
+    query: { page, pageSize, q: searchQ, batch: selectedBatch, subject: selectedSubject },
+  });
   const subjectMap = new Map<string, { id: string; name: string }>();
   for (const b of batches) {
     for (const bs of b.batch_subjects ?? []) {

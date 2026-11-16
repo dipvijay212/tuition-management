@@ -1,59 +1,38 @@
 import type { Metadata } from "next";
 import { FileText } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { FilterBar, SearchInput, SelectFilter } from "@/components/shared/filters";
 import { UploadMaterialDialog } from "@/features/materials/upload-dialog";
 import { MaterialDownloadButton, DeleteMaterialButton } from "@/features/materials/material-actions";
 import { formatDate } from "@/lib/utilities/format";
-import { pageParams, str, likeTerm } from "@/lib/utilities/query";
+import { pageParams, str } from "@/lib/utilities/query";
 
 export const metadata: Metadata = { title: "Study Materials & Notes" };
 
 export default async function TeacherMaterialsPage(props: PageProps<"/teacher/materials">) {
   await requireRole("teacher");
   const sp = await props.searchParams;
-  const { page, pageSize, from, to } = pageParams(sp);
-  const supabase = await createClient();
+  const { page, pageSize } = pageParams(sp);
 
   const selectedClass = str(sp.class);
   const selectedBatch = str(sp.batch);
   const selectedSubject = str(sp.subject);
   const searchQ = str(sp.q);
-
-  let q = supabase
-    .from("study_materials")
-    .select(
-      "id, title, description, file_path, mime_type, size_bytes, visibility, is_active, created_at, classes(id, name), batches(id, name), subjects(id, name), profiles(full_name)",
-      { count: "exact" }
-    )
-    .eq("is_active", true)
-    .order("created_at", { ascending: false })
-    .range(from, to);
-
-  if (searchQ) q = q.ilike("title", likeTerm(searchQ));
-  if (selectedClass) q = q.eq("class_id", selectedClass);
-  if (selectedBatch) q = q.eq("batch_id", selectedBatch);
-  if (selectedSubject) q = q.eq("subject_id", selectedSubject);
-
-  // Assigned batches (with embedded batch data) and the materials list load in parallel.
-  const [{ data: assignments }, { data: materials, count, error }] = await Promise.all([
-    supabase
-      .from("teacher_batches")
-      .select("batches!inner(id, name, class_id, classes(id, name), batch_subjects(subjects(id, name)))")
-      .eq("is_active", true)
-      .eq("batches.status", "active"),
-    q,
-  ]);
-  if (error) throw error;
-
-  const seen = new Set<string>();
-  const batches = (assignments ?? [])
-    .map((a) => a.batches)
-    .filter((b) => b && !seen.has(b.id) && seen.add(b.id))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  type MatRow = Pick<Tables<"study_materials">, "id" | "title" | "description" | "file_path" | "mime_type" | "size_bytes" | "visibility" | "is_active" | "created_at"> & {
+    classes: { id: string; name: string } | null;
+    batches: { id: string; name: string } | null;
+    subjects: { id: string; name: string } | null;
+    profiles: { full_name: string } | null;
+  };
+  type MyBatch = { id: string; name: string; class_id: string; classes: { id: string; name: string } | null; batch_subjects: { subjects: { id: string; name: string } | null }[] };
+  // Visible materials and the teacher's assigned batches in one call.
+  const { rows: materials, count, batches } = await api<{ rows: MatRow[]; count: number; batches: MyBatch[] }>("/learning/materials", {
+    query: { page, pageSize, q: searchQ, class: selectedClass, batch: selectedBatch, subject: selectedSubject },
+  });
   const classMap = new Map<string, { id: string; name: string }>();
   const subjectMap = new Map<string, { id: string; name: string; class_id: string | null }>();
 

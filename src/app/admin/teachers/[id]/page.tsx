@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Mail, Phone, Pencil } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
-import { signedUrl } from "@/lib/supabase/storage";
+import { api } from "@/lib/api/server";
+import type { Tables } from "@/types/database";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,15 +18,12 @@ export const metadata: Metadata = { title: "Teacher" };
 export default async function TeacherProfilePage(props: PageProps<"/admin/teachers/[id]">) {
   const ctx = await requireRole("admin");
   const { id } = await props.params;
-  const supabase = await createClient();
-  const { data: t } = await supabase.from("teachers").select("*").eq("id", id).maybeSingle();
-  if (!t) notFound();
-  const [{ data: subjects }, { data: batches }, { data: att }, photo] = await Promise.all([
-    t.subject_ids.length ? supabase.from("subjects").select("id, name").in("id", t.subject_ids) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-    supabase.from("teacher_batches").select("id, start_date, is_active, batches(id, name, start_time, end_time, class_days, classes(name), student_batches(count))").eq("teacher_id", id).order("is_active", { ascending: false }),
-    supabase.from("teacher_attendance").select("attendance_date, status, remarks").eq("teacher_id", id).order("attendance_date", { ascending: false }).limit(10),
-    signedUrl(t.photo_path),
-  ]);
+  type TB = { id: string; start_date: string; is_active: boolean; batches: Pick<Tables<"batches">, "id" | "name" | "start_time" | "end_time" | "class_days"> & { classes: { name: string } | null; student_batches: { count: number }[] } };
+  type Att = Pick<Tables<"teacher_attendance">, "attendance_date" | "status" | "remarks">;
+  const r = await api<{ teacher: Tables<"teachers"> | null; subjects: { id: string; name: string }[]; batches: TB[]; attendance: Att[]; photoUrl: string | null }>(`/teachers/${encodeURIComponent(id)}`).catch(() => null);
+  const t = r?.teacher;
+  if (!r || !t) notFound();
+  const { subjects, batches, attendance: att, photoUrl: photo } = r;
   const active = (batches ?? []).filter((b) => b.is_active);
   return (
     <>
