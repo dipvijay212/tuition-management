@@ -12,9 +12,16 @@ export const metadata: Metadata = { title: "My batches" };
 export default async function TeacherBatches() {
   await requireRole("teacher");
   const supabase = await createClient();
-  const { data: tb } = await supabase.from("teacher_batches").select("batch_id").eq("is_active", true);
-  const ids = (tb ?? []).map((t) => t.batch_id);
-  const { data } = ids.length ? await supabase.from("batches").select("id, name, room, status, class_days, start_time, end_time, capacity, classes(name), student_batches(status), batch_subjects(subjects(name))").in("id", ids).order("name") : { data: [] };
+  // One round trip: active assignments with the batch embedded.
+  const { data: tb } = await supabase
+    .from("teacher_batches")
+    .select("batches!inner(id, name, room, status, class_days, start_time, end_time, capacity, classes(name), student_batches(status), batch_subjects(subjects(name)))")
+    .eq("is_active", true);
+  const seen = new Set<string>();
+  const data = (tb ?? [])
+    .map((t) => t.batches)
+    .filter((b) => b && !seen.has(b.id) && seen.add(b.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
   return (
     <>
       <PageHeader title="My batches" description="Batches assigned to you by the institute." />

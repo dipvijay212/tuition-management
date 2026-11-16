@@ -20,9 +20,11 @@ export default async function BatchPage(props: PageProps<"/admin/batches/[id]">)
   const ctx = await requireRole("admin");
   const { id } = await props.params;
   const supabase = await createClient();
-  const { data: b } = await supabase.from("batches").select("*, classes(name), academic_years(name), teacher_batches(id, is_active, teachers(id, full_name)), batch_subjects(id, subjects(name))").eq("id", id).maybeSingle();
+  const [{ data: b }, { data: enrolments }] = await Promise.all([
+    supabase.from("batches").select("*, classes(name), academic_years(name), teacher_batches(id, is_active, teachers(id, full_name)), batch_subjects(id, subjects(name))").eq("id", id).maybeSingle(),
+    supabase.from("student_batches").select("id, start_date, end_date, status, end_reason, capacity_override_reason, students(id, full_name, admission_no, status)").eq("batch_id", id).order("status").order("start_date", { ascending: false }),
+  ]);
   if (!b) notFound();
-  const { data: enrolments } = await supabase.from("student_batches").select("id, start_date, end_date, status, end_reason, capacity_override_reason, students(id, full_name, admission_no, status)").eq("batch_id", id).order("status").order("start_date", { ascending: false });
   const active = (enrolments ?? []).filter((e) => e.status === "active");
   const past = (enrolments ?? []).filter((e) => e.status !== "active");
   const seatsLeft = b.capacity ? b.capacity - active.length : null;

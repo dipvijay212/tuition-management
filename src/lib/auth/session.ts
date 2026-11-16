@@ -36,25 +36,28 @@ export const getSession = cache(async (): Promise<SessionContext | null> => {
   const userId = claims?.claims?.sub;
   if (!userId) return null;
 
-  const { data: profile } = await supabase
+  // One round trip: profile + roles + institute + timezone via embedded relations.
+  // (The hosted DB is far from the app server, so every sequential query adds noticeable latency.)
+  const { data: row } = await supabase
     .from("profiles")
-    .select("id, full_name, email, phone, avatar_path, status, institute_id")
+    .select(
+      "id, full_name, email, phone, avatar_path, status, institute_id, user_roles!user_roles_user_id_fkey(role, institute_id), institutes(id, name, logo_path, institute_settings(timezone))",
+    )
     .eq("id", userId)
     .maybeSingle();
-  if (!profile) return null;
+  if (!row) return null;
+  const { user_roles: roleRows, institutes: inst, ...profile } = row;
 
   let roles: AppRole[] = [];
   let institute: SessionContext["institute"] = null;
   let timezone = "Asia/Kolkata";
   if (profile.status === "active" && profile.institute_id) {
-    const [{ data: r }, { data: inst }, { data: settings }] = await Promise.all([
-      supabase.from("user_roles").select("role").eq("user_id", userId).eq("institute_id", profile.institute_id),
-      supabase.from("institutes").select("id, name, logo_path").eq("id", profile.institute_id).maybeSingle(),
-      supabase.from("institute_settings").select("timezone").eq("institute_id", profile.institute_id).maybeSingle(),
-    ]);
-    roles = ROLE_PRIORITY.filter((role) => r?.some((x) => x.role === role));
-    institute = inst ?? null;
-    timezone = settings?.timezone ?? timezone;
+    roles = ROLE_PRIORITY.filter((role) => roleRows?.some((x) => x.role === role && x.institute_id === profile.institute_id));
+    if (inst) {
+      institute = { id: inst.id, name: inst.name, logo_path: inst.logo_path };
+      const settings = Array.isArray(inst.institute_settings) ? inst.institute_settings[0] : inst.institute_settings;
+      timezone = settings?.timezone ?? timezone;
+    }
   }
 
   // Auto-heal / link roles if the user exists in guardians, students, or teachers by email or phone

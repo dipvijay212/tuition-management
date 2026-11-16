@@ -11,8 +11,12 @@ export const metadata: Metadata = { title: "Profile" };
 export default async function TeacherProfile() {
   const ctx = await requireRole("teacher");
   const supabase = await createClient();
-  const { data: t } = await supabase.from("teachers").select("full_name, phone, email, qualification, specialization, joining_date, subject_ids").maybeSingle();
-  const { data: subs } = t?.subject_ids.length ? await supabase.from("subjects").select("name").in("id", t.subject_ids) : { data: [] };
+  // Both in parallel; the institute's subject list is small, so filter it here instead of a second round trip.
+  const [{ data: t }, { data: allSubs }] = await Promise.all([
+    supabase.from("teachers").select("full_name, phone, email, qualification, specialization, joining_date, subject_ids").eq("profile_id", ctx.userId).maybeSingle(),
+    supabase.from("subjects").select("id, name").order("name"),
+  ]);
+  const subs = (allSubs ?? []).filter((s) => t?.subject_ids.includes(s.id));
   return (
     <>
       <PageHeader title="My profile" />

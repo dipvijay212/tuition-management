@@ -24,11 +24,16 @@ export default async function StudentAttendancePage() {
   }
 
   // Find student ID
-  const { data: student } = await supabase
+  // One round trip: the student's own record with attendance embedded.
+  const { data: student, error } = await supabase
     .from("students")
-    .select("id")
+    .select("id, attendance(id, session_date, status, remarks, batches(name))")
+    .eq("profile_id", session.userId)
     .eq("institute_id", session.institute.id)
-    .single();
+    .order("session_date", { referencedTable: "attendance", ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
 
   if (!student) {
     return (
@@ -39,13 +44,7 @@ export default async function StudentAttendancePage() {
     );
   }
 
-  const { data: records, error } = await supabase
-    .from("attendance")
-    .select("id, session_date, status, remarks, batches(name)")
-    .eq("student_id", student.id)
-    .order("session_date", { ascending: false });
-
-  if (error) throw error;
+  const records = student.attendance;
 
   const total = records?.length ?? 0;
   const present = records?.filter((r) => r.status === "present").length ?? 0;

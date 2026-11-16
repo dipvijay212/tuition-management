@@ -28,31 +28,62 @@ export default async function TeacherAttendancePage(props: PageProps<"/teacher/a
   const supabase = await createClient();
   const today = todayIn();
 
-  // 1. Fetch batches assigned to this teacher
-  const { data: tb } = await supabase
-    .from("teacher_batches")
-    .select("batch_id")
-    .eq("is_active", true);
+  const { page, pageSize, from, to } = pageParams(sp);
+  const selectedBatchFilter = str(sp.batch);
+  const selectedDateFilter = str(sp.date);
 
-  const batchIds = (tb ?? []).map((t) => t.batch_id);
+  // Sessions are scoped to the teacher's active assignments through an inner join, so all three
+  // queries run in parallel (one round trip) and attendance counts arrive embedded with each session.
+  const ASSIGNED = "batches!inner(teacher_batches!inner(is_active))";
+  let historyQuery = supabase
+    .from("class_sessions")
+    .select(
+      `id, batch_id, session_date, start_time, end_time, room, status, attendance_submitted_at, batches(id, name), subjects(name), attendance(status), assigned:${ASSIGNED}`,
+      { count: "exact" }
+    )
+    .eq("assigned.teacher_batches.is_active", true)
+    .lte("session_date", today)
+    .order("session_date", { ascending: false })
+    .range(from, to);
+  if (selectedBatchFilter) historyQuery = historyQuery.eq("batch_id", selectedBatchFilter);
+  if (selectedDateFilter) historyQuery = historyQuery.eq("session_date", selectedDateFilter);
 
-  const { data: rawBatches, error: batchError } = batchIds.length > 0
-    ? await supabase
-        .from("batches")
-        .select(`
+  const [
+    { data: assignments, error: batchError },
+    { data: todaySessions },
+    { data: historySessions, count: historyCount, error: historyError },
+  ] = await Promise.all([
+    // 1. Active batches assigned to this teacher
+    supabase
+      .from("teacher_batches")
+      .select(`
+        batches!inner(
           id, name, room, status, class_days, start_time, end_time, capacity,
           classes(id, name),
           student_batches(status),
           batch_subjects(subjects(id, name))
-        `)
-        .in("id", batchIds)
-        .eq("status", "active")
-        .order("name")
-    : { data: [], error: null };
+        )
+      `)
+      .eq("is_active", true)
+      .eq("batches.status", "active"),
+    // 2. Today's sessions for those batches
+    supabase
+      .from("class_sessions")
+      .select(`id, batch_id, session_date, attendance_submitted_at, status, attendance(status), assigned:${ASSIGNED}`)
+      .eq("assigned.teacher_batches.is_active", true)
+      .eq("session_date", today),
+    // 3. Attendance history (sessions up to today)
+    historyQuery,
+  ]);
 
   if (batchError) throw batchError;
+  if (historyError) throw historyError;
 
-  const batches = rawBatches ?? [];
+  const seenBatches = new Set<string>();
+  const batches = (assignments ?? [])
+    .map((a) => a.batches)
+    .filter((b) => b && !seenBatches.has(b.id) && seenBatches.add(b.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   // Collect unique subjects for the dialog
   const subjectMap = new Map<string, { id: string; name: string }>();
@@ -63,74 +94,28 @@ export default async function TeacherAttendancePage(props: PageProps<"/teacher/a
   }
   const subjectsList = Array.from(subjectMap.values());
 
-  // 2. Fetch today's sessions for these batches
-  const { data: todaySessions } = batchIds.length > 0
-    ? await supabase
-        .from("class_sessions")
-        .select("id, batch_id, session_date, attendance_submitted_at, status")
-        .in("batch_id", batchIds)
-        .eq("session_date", today)
-    : { data: [] };
-
   const todaySessionByBatch = new Map((todaySessions ?? []).map((s) => [s.batch_id, s]));
-  const todaySessionIds = (todaySessions ?? []).map((s) => s.id);
-
-  // Attendance records for today's sessions
-  const { data: todayAttendanceRecords } = todaySessionIds.length > 0
-    ? await supabase
-        .from("attendance")
-        .select("session_id, student_id, status")
-        .in("session_id", todaySessionIds)
-    : { data: [] };
-
   const todayStatsBySession = new Map<string, { present: number; absent: number }>();
-  for (const a of todayAttendanceRecords ?? []) {
-    const cur = todayStatsBySession.get(a.session_id) ?? { present: 0, absent: 0 };
-    if (a.status === "present" || a.status === "late") cur.present += 1;
-    else if (a.status === "absent") cur.absent += 1;
-    todayStatsBySession.set(a.session_id, cur);
+  for (const sess of todaySessions ?? []) {
+    if (!sess.attendance?.length) continue;
+    const cur = { present: 0, absent: 0 };
+    for (const a of sess.attendance ?? []) {
+      if (a.status === "present" || a.status === "late") cur.present += 1;
+      else if (a.status === "absent") cur.absent += 1;
+    }
+    todayStatsBySession.set(sess.id, cur);
   }
 
-  // 3. Attendance History query for teacher's batches (only sessions up to today)
-  const { page, pageSize, from, to } = pageParams(sp);
-  const selectedBatchFilter = str(sp.batch);
-  const selectedDateFilter = str(sp.date);
-
-  let historyQuery = supabase
-    .from("class_sessions")
-    .select(
-      "id, batch_id, session_date, start_time, end_time, room, status, attendance_submitted_at, batches(id, name), subjects(name)",
-      { count: "exact" }
-    )
-    .in("batch_id", batchIds)
-    .lte("session_date", today)
-    .order("session_date", { ascending: false })
-    .range(from, to);
-
-  if (selectedBatchFilter) historyQuery = historyQuery.eq("batch_id", selectedBatchFilter);
-  if (selectedDateFilter) historyQuery = historyQuery.eq("session_date", selectedDateFilter);
-
-  const { data: historySessions, count: historyCount, error: historyError } = batchIds.length > 0
-    ? await historyQuery
-    : { data: [], count: 0, error: null };
-
-  if (historyError) throw historyError;
-
-  const historySessionIds = (historySessions ?? []).map((s) => s.id);
-  const { data: historyAttendanceRecords } = historySessionIds.length > 0
-    ? await supabase
-        .from("attendance")
-        .select("session_id, student_id, status")
-        .in("session_id", historySessionIds)
-    : { data: [] };
-
   const historyStatsBySession = new Map<string, { total: number; present: number; absent: number }>();
-  for (const a of historyAttendanceRecords ?? []) {
-    const cur = historyStatsBySession.get(a.session_id) ?? { total: 0, present: 0, absent: 0 };
-    cur.total += 1;
-    if (a.status === "present" || a.status === "late") cur.present += 1;
-    else if (a.status === "absent") cur.absent += 1;
-    historyStatsBySession.set(a.session_id, cur);
+  for (const sess of historySessions ?? []) {
+    if (!sess.attendance?.length) continue; // no records yet: the table falls back to enrolment count
+    const cur = { total: 0, present: 0, absent: 0 };
+    for (const a of sess.attendance ?? []) {
+      cur.total += 1;
+      if (a.status === "present" || a.status === "late") cur.present += 1;
+      else if (a.status === "absent") cur.absent += 1;
+    }
+    historyStatsBySession.set(sess.id, cur);
   }
 
   return (

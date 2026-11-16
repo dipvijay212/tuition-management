@@ -23,13 +23,15 @@ type T = {
 export default async function TeacherDashboard() {
   const ctx = await requireRole("teacher");
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("teacher_dashboard");
+  const [{ data, error }, { data: ann }] = await Promise.all([
+    supabase.rpc("teacher_dashboard"),
+    supabase.from("announcements").select("id, title, body, created_at").order("created_at", { ascending: false }).limit(4),
+  ]);
   if (error) {
     if (error.message.includes("Not authorized")) return <EmptyState title="Your teacher profile isn't linked yet" description="Ask the institute admin to link your login to your teacher record." />;
     throw new Error(error.message);
   }
   const d = data as unknown as T;
-  const { data: ann } = await supabase.from("announcements").select("id, title, body, created_at").order("created_at", { ascending: false }).limit(4);
   return (
     <>
       <PageHeader title={`Hello, ${ctx.profile.full_name.split(" ")[0]}`} description={formatDate(d.today, { weekday: "long", day: "numeric", month: "long" })} />

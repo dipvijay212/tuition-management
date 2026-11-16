@@ -23,11 +23,28 @@ export default async function StudentHomeworkPage() {
   }
 
   // Find student ID and active batches
-  const { data: student } = await supabase
-    .from("students")
-    .select("id, student_batches(batch_id, status)")
-    .eq("institute_id", session.institute.id)
-    .single();
+  // Both in parallel: homework is scoped to the student's active enrolments with an inner join.
+  const [{ data: student }, { data: homeworkList, error }] = await Promise.all([
+    supabase
+      .from("students")
+      .select("id")
+      .eq("profile_id", session.userId)
+      .eq("institute_id", session.institute.id)
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("homework")
+      .select(`
+        id, title, description, assigned_date, due_at,
+        batches(name),
+        subjects(name),
+        homework_submissions(status, feedback),
+        enrolled:batches!inner(student_batches!inner(status, students!inner(profile_id)))
+      `)
+      .eq("enrolled.student_batches.status", "active")
+      .eq("enrolled.student_batches.students.profile_id", session.userId)
+      .order("due_at", { ascending: false }),
+  ]);
 
   if (!student) {
     return (
@@ -38,22 +55,6 @@ export default async function StudentHomeworkPage() {
     );
   }
 
-  const batchIds = (student.student_batches ?? [])
-    .filter((b) => b.status === "active")
-    .map((b) => b.batch_id);
-
-  const { data: homeworkList, error } = batchIds.length > 0
-    ? await supabase
-        .from("homework")
-        .select(`
-          id, title, description, assigned_date, due_at,
-          batches(name),
-          subjects(name),
-          homework_submissions(status, feedback)
-        `)
-        .in("batch_id", batchIds)
-        .order("due_at", { ascending: false })
-    : { data: [], error: null };
 
   if (error) throw error;
 

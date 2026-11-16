@@ -26,6 +26,58 @@ import { pageParams, str, likeTerm } from "@/lib/utilities/query";
 
 export const metadata: Metadata = { title: "Attendance Management" };
 
+/**
+ * Class-detail data for the attendance page. Sessions are scoped to the class with an inner join
+ * (instead of first fetching batch ids), and attendance rows are embedded, so it is one round trip.
+ */
+async function loadClassDetail(supabase: Awaited<ReturnType<typeof createClient>>, classId: string, today: string, sp: Record<string, string | string[] | undefined>) {
+  const { from, to } = pageParams(sp);
+  const selectedBatchFilter = str(sp.batch);
+  const selectedDateFilter = str(sp.date);
+  const IN_CLASS = "in_class:batches!inner(class_id, status)";
+
+  let historyQuery = supabase
+    .from("class_sessions")
+    .select(
+      `id, batch_id, session_date, start_time, end_time, room, status, attendance_submitted_at, batches(id, name), subjects(name), teachers(full_name), attendance(status), ${IN_CLASS}`,
+      { count: "exact" }
+    )
+    .eq("in_class.class_id", classId)
+    .eq("in_class.status", "active")
+    .lte("session_date", today)
+    .order("session_date", { ascending: false })
+    .range(from, to);
+  if (selectedBatchFilter) historyQuery = historyQuery.eq("batch_id", selectedBatchFilter);
+  if (selectedDateFilter) historyQuery = historyQuery.eq("session_date", selectedDateFilter);
+
+  const [batchesRes, subjectsRes, todayRes, historyRes] = await Promise.all([
+    supabase
+      .from("batches")
+      .select(`
+        id, class_id, name, capacity, room, status, class_days, start_time, end_time,
+        teacher_batches(is_active, teachers(id, full_name)),
+        student_batches(id, status, student_id)
+      `)
+      .eq("class_id", classId)
+      .eq("status", "active")
+      .order("name"),
+    supabase
+      .from("subjects")
+      .select("id, name, class_id")
+      .or(`class_id.eq.${classId},class_id.is.null`)
+      .order("name"),
+    supabase
+      .from("class_sessions")
+      .select(`id, batch_id, session_date, attendance_submitted_at, status, attendance(status), ${IN_CLASS}`)
+      .eq("in_class.class_id", classId)
+      .eq("in_class.status", "active")
+      .eq("session_date", today),
+    historyQuery,
+  ]);
+  return { batchesRes, subjectsRes, todayRes, historyRes };
+}
+
+
 export default async function AdminAttendancePage(props: PageProps<"/admin/attendance">) {
   await requireRole("admin");
   const sp = await props.searchParams;
@@ -45,6 +97,10 @@ export default async function AdminAttendancePage(props: PageProps<"/admin/atten
   if (str(sp.q) && !selectedClassId) {
     classQuery = classQuery.ilike("name", likeTerm(str(sp.q)!));
   }
+
+  // When a class is selected, its detail queries start now, in parallel with the class list.
+  const detailP = selectedClassId ? loadClassDetail(supabase, selectedClassId, today, sp) : null;
+  detailP?.catch(() => {});
 
   const { data: rawClasses, error: classError } = await classQuery;
   if (classError) throw classError;
@@ -174,100 +230,40 @@ export default async function AdminAttendancePage(props: PageProps<"/admin/atten
     academic_year: undefined,
   };
 
-  const [
-    { data: batches, error: batchError },
-    { data: subjects },
-  ] = await Promise.all([
-    supabase
-      .from("batches")
-      .select(`
-        id, class_id, name, capacity, room, status, class_days, start_time, end_time,
-        teacher_batches(is_active, teachers(id, full_name)),
-        student_batches(id, status, student_id)
-      `)
-      .eq("class_id", selectedClassId)
-      .eq("status", "active")
-      .order("name"),
-    supabase
-      .from("subjects")
-      .select("id, name, class_id")
-      .or(`class_id.eq.${selectedClassId},class_id.is.null`)
-      .order("name"),
-  ]);
-
+  const detail = await detailP!;
+  const { data: batches, error: batchError } = detail.batchesRes;
+  const { data: subjects } = detail.subjectsRes;
+  const { data: todaySessions } = detail.todayRes;
+  const { data: historySessions, count: historyCount, error: historyError } = detail.historyRes;
   if (batchError) throw batchError;
-
-  const batchList = batches ?? [];
-  const batchIds = batchList.map((b) => b.id);
-
-  // Today's sessions for these batches
-  const { data: todaySessions } = batchIds.length > 0
-    ? await supabase
-        .from("class_sessions")
-        .select("id, batch_id, session_date, attendance_submitted_at, status")
-        .in("batch_id", batchIds)
-        .eq("session_date", today)
-    : { data: [] };
-
-  const todaySessionByBatch = new Map((todaySessions ?? []).map((s) => [s.batch_id, s]));
-  const todaySessionIds = (todaySessions ?? []).map((s) => s.id);
-
-  // Attendance records for today's sessions to calculate present/absent counts
-  const { data: todayAttendanceRecords } = todaySessionIds.length > 0
-    ? await supabase
-        .from("attendance")
-        .select("session_id, student_id, status")
-        .in("session_id", todaySessionIds)
-    : { data: [] };
-
-  const todayStatsBySession = new Map<string, { present: number; absent: number }>();
-  for (const a of todayAttendanceRecords ?? []) {
-    const cur = todayStatsBySession.get(a.session_id) ?? { present: 0, absent: 0 };
-    if (a.status === "present" || a.status === "late") cur.present += 1;
-    else if (a.status === "absent") cur.absent += 1;
-    todayStatsBySession.set(a.session_id, cur);
-  }
-
-  // Attendance History query for this class
-  const { page, pageSize, from, to } = pageParams(sp);
-  const selectedBatchFilter = str(sp.batch);
-  const selectedDateFilter = str(sp.date);
-
-  let historyQuery = supabase
-    .from("class_sessions")
-    .select(
-      "id, batch_id, session_date, start_time, end_time, room, status, attendance_submitted_at, batches(id, name), subjects(name), teachers(full_name)",
-      { count: "exact" }
-    )
-    .in("batch_id", batchIds)
-    .lte("session_date", today)
-    .order("session_date", { ascending: false })
-    .range(from, to);
-
-  if (selectedBatchFilter) historyQuery = historyQuery.eq("batch_id", selectedBatchFilter);
-  if (selectedDateFilter) historyQuery = historyQuery.eq("session_date", selectedDateFilter);
-
-  const { data: historySessions, count: historyCount, error: historyError } = batchIds.length > 0
-    ? await historyQuery
-    : { data: [], count: 0, error: null };
-
   if (historyError) throw historyError;
 
-  const historySessionIds = (historySessions ?? []).map((s) => s.id);
-  const { data: historyAttendanceRecords } = historySessionIds.length > 0
-    ? await supabase
-        .from("attendance")
-        .select("session_id, student_id, status")
-        .in("session_id", historySessionIds)
-    : { data: [] };
+  const batchList = batches ?? [];
+
+  const todaySessionByBatch = new Map((todaySessions ?? []).map((s) => [s.batch_id, s]));
+  const todayStatsBySession = new Map<string, { present: number; absent: number }>();
+  for (const sess of todaySessions ?? []) {
+    if (!sess.attendance?.length) continue;
+    const cur = { present: 0, absent: 0 };
+    for (const a of sess.attendance) {
+      if (a.status === "present" || a.status === "late") cur.present += 1;
+      else if (a.status === "absent") cur.absent += 1;
+    }
+    todayStatsBySession.set(sess.id, cur);
+  }
+
+  const { page, pageSize } = pageParams(sp);
 
   const historyStatsBySession = new Map<string, { total: number; present: number; absent: number }>();
-  for (const a of historyAttendanceRecords ?? []) {
-    const cur = historyStatsBySession.get(a.session_id) ?? { total: 0, present: 0, absent: 0 };
-    cur.total += 1;
-    if (a.status === "present" || a.status === "late") cur.present += 1;
-    else if (a.status === "absent") cur.absent += 1;
-    historyStatsBySession.set(a.session_id, cur);
+  for (const sess of historySessions ?? []) {
+    if (!sess.attendance?.length) continue; // no records yet: the table falls back to enrolment count
+    const cur = { total: 0, present: 0, absent: 0 };
+    for (const a of sess.attendance) {
+      cur.total += 1;
+      if (a.status === "present" || a.status === "late") cur.present += 1;
+      else if (a.status === "absent") cur.absent += 1;
+    }
+    historyStatsBySession.set(sess.id, cur);
   }
 
   return (

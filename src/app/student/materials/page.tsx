@@ -26,8 +26,10 @@ export default async function StudentMaterialsPage() {
   const { data: student } = await supabase
     .from("students")
     .select("id, class_id, student_batches(batch_id, status)")
+    .eq("profile_id", session.userId)
     .eq("institute_id", session.institute.id)
-    .single();
+    .limit(1)
+    .maybeSingle();
 
   if (!student) {
     return (

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { FileText, Pencil, Phone, Mail } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import { signedUrl, signedUrls } from "@/lib/supabase/storage";
+import { signedUrls } from "@/lib/supabase/storage";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,10 +24,9 @@ export default async function StudentProfile(props: PageProps<"/admin/students/[
   const ctx = await requireRole("admin");
   const { id } = await props.params;
   const supabase = await createClient();
-  const { data: s } = await supabase.from("students").select("*, classes(name), academic_years(name)").eq("id", id).maybeSingle();
-  if (!s) notFound();
-
-  const [parents, enrolments, obligations, payments, summary, recentAtt, results, docs, history, subjects, allBatches, audit] = await Promise.all([
+  // Everything keyed by the student id loads in one parallel round trip (the student row included).
+  const [{ data: s }, parents, enrolments, obligations, payments, summary, recentAtt, results, docs, history, subjects, allBatches, audit] = await Promise.all([
+    supabase.from("students").select("*, classes(name), academic_years(name)").eq("id", id).maybeSingle(),
     supabase.from("parent_students").select("id, relationship, is_primary, is_emergency_contact, guardians(id, full_name, phone, alt_phone, email, profile_id)").eq("student_id", id),
     supabase.from("student_batches").select("id, start_date, end_date, status, end_reason, batches(id, name, classes(name))").eq("student_id", id).order("start_date", { ascending: false }),
     supabase.from("fee_obligation_balances").select("id, description, due_date, net_amount, amount_paid, balance, effective_status, discount_amount, gross_amount, late_fee_amount").eq("student_id", id).order("due_date"),
@@ -37,12 +36,15 @@ export default async function StudentProfile(props: PageProps<"/admin/students/[
     supabase.from("published_results").select("id, percentage, grade, is_pass, rank, total_obtained, total_max, examinations(name, start_date)").eq("student_id", id).order("published_at", { ascending: false }),
     supabase.from("student_documents").select("id, title, file_path, created_at, size_bytes").eq("student_id", id).order("created_at", { ascending: false }),
     supabase.from("student_status_history").select("id, from_status, to_status, reason, changed_at").eq("student_id", id).order("changed_at", { ascending: false }),
-    s.subject_ids.length ? supabase.from("subjects").select("id, name").in("id", s.subject_ids) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    supabase.from("subjects").select("id, name"), // small list; filtered to the student's subjects below
     supabase.from("batches").select("id, name, capacity, student_batches(status)").eq("status", "active").order("name"),
     supabase.from("audit_logs").select("id, action, created_at, reason").eq("entity_id", id).order("created_at", { ascending: false }).limit(20),
   ]);
-  const photo = await signedUrl(s.photo_path);
-  const docUrls = await signedUrls((docs.data ?? []).map((d) => d.file_path));
+  if (!s) notFound();
+  subjects.data = (subjects.data ?? []).filter((x) => s.subject_ids.includes(x.id));
+  // Photo and document links are signed in a single storage call.
+  const docUrls = await signedUrls([...(s.photo_path ? [s.photo_path] : []), ...(docs.data ?? []).map((d) => d.file_path)]);
+  const photo = s.photo_path ? (docUrls[s.photo_path] ?? null) : null;
   const att = summary.data?.[0];
   const obl = obligations.data ?? [];
   const outstanding = obl.filter((o) => ["unpaid", "partially_paid", "overdue"].includes(o.effective_status ?? "")).reduce((a, o) => a + Number(o.balance), 0);

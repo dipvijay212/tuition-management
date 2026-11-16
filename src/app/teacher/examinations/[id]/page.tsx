@@ -15,40 +15,45 @@ export default async function TeacherExamDetailPage(props: PageProps<"/teacher/e
   const { id } = await props.params;
   const supabase = await createClient();
 
-  const { data: exam, error } = await supabase
-    .from("examinations")
-    .select("id, name, exam_type, start_date, end_date, status, batch_id, batches(name)")
-    .eq("id", id)
-    .single();
+  // Everything that only needs the exam id loads in parallel (one round trip).
+  const [{ data: exam, error }, { data: examSubjects }, { data: existingMarks }] = await Promise.all([
+    supabase
+      .from("examinations")
+      .select("id, name, exam_type, start_date, end_date, status, batch_id, batches(name)")
+      .eq("id", id)
+      .single(),
+    supabase
+      .from("examination_subjects")
+      .select("id, subject_id, exam_date, max_marks, passing_marks, subjects(name)")
+      .eq("examination_id", id),
+    supabase
+      .from("marks")
+      .select("examination_subject_id, student_id, obtained_marks, is_absent, remarks, examination_subjects!inner(examination_id)")
+      .eq("examination_subjects.examination_id", id),
+  ]);
 
   if (error || !exam) notFound();
 
-  const { data: examSubjects } = await supabase
-    .from("examination_subjects")
-    .select("id, subject_id, exam_date, max_marks, passing_marks, subjects(name)")
-    .eq("examination_id", id);
-
-  // Get enrolled students
-  let studentsQuery = supabase.from("students").select("id, full_name, admission_no").eq("status", "active");
+  // Enrolled students: one more round trip, since it depends on the exam's batch.
+  type Eligible = { id: string; full_name: string; admission_no: string };
+  let eligibleStudents: Eligible[] = [];
   if (exam.batch_id) {
-    const { data: batchEnrolments } = await supabase
+    const { data: enrolled } = await supabase
       .from("student_batches")
-      .select("student_id")
+      .select("students!inner(id, full_name, admission_no, status)")
       .eq("batch_id", exam.batch_id)
-      .eq("status", "active");
-    const studentIds = (batchEnrolments ?? []).map((b) => b.student_id);
-    studentsQuery = studentsQuery.in("id", studentIds.length > 0 ? studentIds : ["00000000-0000-0000-0000-000000000000"]);
+      .eq("status", "active")
+      .eq("students.status", "active");
+    const seen = new Set<string>();
+    for (const e of enrolled ?? []) {
+      const st = e.students as unknown as Eligible | null;
+      if (st && !seen.has(st.id)) { seen.add(st.id); eligibleStudents.push({ id: st.id, full_name: st.full_name, admission_no: st.admission_no }); }
+    }
+    eligibleStudents.sort((a, b) => a.full_name.localeCompare(b.full_name));
+  } else {
+    const { data } = await supabase.from("students").select("id, full_name, admission_no").eq("status", "active").order("full_name");
+    eligibleStudents = data ?? [];
   }
-  const { data: eligibleStudents } = await studentsQuery.order("full_name");
-
-  // Fetch existing marks
-  const examSubIds = (examSubjects ?? []).map((s) => s.id);
-  const { data: existingMarks } = examSubIds.length > 0
-    ? await supabase
-        .from("marks")
-        .select("examination_subject_id, student_id, obtained_marks, is_absent, remarks")
-        .in("examination_subject_id", examSubIds)
-    : { data: [] };
 
   const marksMap = new Map<string, Map<string, { obtained_marks: number | null; is_absent: boolean; remarks: string | null }>>();
   for (const m of existingMarks ?? []) {

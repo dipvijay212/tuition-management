@@ -13,12 +13,13 @@ export default async function TeacherBatchPage(props: PageProps<"/teacher/batche
   const { id } = await props.params;
   const supabase = await createClient();
   // RLS: only students in this teacher's batches are returned.
-  const { data: tb } = await supabase.from("teacher_batches").select("id").eq("batch_id", id).eq("is_active", true).maybeSingle();
-  if (!tb) notFound();
-  const [{ data: b }, { data: rows }] = await Promise.all([
-    supabase.from("batches").select("name, class_days, start_time, end_time, room, classes(name)").eq("id", id).single(),
+  // The assignment check and the data load run in parallel; nothing renders unless the check passes.
+  const [{ data: tb }, { data: b }, { data: rows }] = await Promise.all([
+    supabase.from("teacher_batches").select("id").eq("batch_id", id).eq("is_active", true).limit(1).maybeSingle(),
+    supabase.from("batches").select("name, class_days, start_time, end_time, room, classes(name)").eq("id", id).maybeSingle(),
     supabase.from("student_batches").select("id, start_date, students(id, full_name, admission_no, phone)").eq("batch_id", id).eq("status", "active").order("start_date"),
   ]);
+  if (!tb) notFound();
   if (!b) notFound();
   return (
     <>

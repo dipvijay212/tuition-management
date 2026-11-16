@@ -20,43 +20,19 @@ export default async function TeacherHomeworkPage(props: PageProps<"/teacher/hom
   const supabase = await createClient();
   const today = todayIn();
 
-  // Fetch batches assigned to this teacher
-  const { data: tb } = await supabase
-    .from("teacher_batches")
-    .select("batch_id")
-    .eq("is_active", true);
-
-  const batchIds = (tb ?? []).map((t) => t.batch_id);
-
-  const { data: rawBatches } = batchIds.length > 0
-    ? await supabase
-        .from("batches")
-        .select("id, name, classes(name), batch_subjects(subjects(id, name))")
-        .in("id", batchIds)
-        .eq("status", "active")
-        .order("name")
-    : { data: [] };
-
-  const batches = rawBatches ?? [];
-  const subjectMap = new Map<string, { id: string; name: string }>();
-  for (const b of batches) {
-    for (const bs of b.batch_subjects ?? []) {
-      if (bs.subjects) subjectMap.set(bs.subjects.id, bs.subjects);
-    }
-  }
-  const subjects = Array.from(subjectMap.values());
-
   const selectedBatch = str(sp.batch);
   const selectedSubject = str(sp.subject);
   const searchQ = str(sp.q);
 
+  // Homework is scoped to the teacher's active assignments with an inner join, so it loads in
+  // parallel with the batch list instead of waiting for batch ids (one round trip, not three).
   let q = supabase
     .from("homework")
     .select(
-      "id, title, description, assigned_date, due_at, batch_id, subject_id, batches(id, name, classes(name)), subjects(id, name), homework_submissions(status)",
+      "id, title, description, assigned_date, due_at, batch_id, subject_id, batches(id, name, classes(name)), subjects(id, name), homework_submissions(status), assigned:batches!inner(teacher_batches!inner(is_active))",
       { count: "exact" }
     )
-    .in("batch_id", batchIds)
+    .eq("assigned.teacher_batches.is_active", true)
     .order("due_at", { ascending: false })
     .range(from, to);
 
@@ -64,11 +40,28 @@ export default async function TeacherHomeworkPage(props: PageProps<"/teacher/hom
   if (selectedBatch) q = q.eq("batch_id", selectedBatch);
   if (selectedSubject) q = q.eq("subject_id", selectedSubject);
 
-  const { data: homeworkList, count, error } = batchIds.length > 0
-    ? await q
-    : { data: [], count: 0, error: null };
-
+  const [{ data: assignments }, { data: homeworkList, count, error }] = await Promise.all([
+    supabase
+      .from("teacher_batches")
+      .select("batches!inner(id, name, classes(name), batch_subjects(subjects(id, name)))")
+      .eq("is_active", true)
+      .eq("batches.status", "active"),
+    q,
+  ]);
   if (error) throw error;
+
+  const seen = new Set<string>();
+  const batches = (assignments ?? [])
+    .map((a) => a.batches)
+    .filter((b) => b && !seen.has(b.id) && seen.add(b.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const subjectMap = new Map<string, { id: string; name: string }>();
+  for (const b of batches) {
+    for (const bs of b.batch_subjects ?? []) {
+      if (bs.subjects) subjectMap.set(bs.subjects.id, bs.subjects);
+    }
+  }
+  const subjects = Array.from(subjectMap.values());
 
   const assignBtn = (
     <AssignHomeworkDialog

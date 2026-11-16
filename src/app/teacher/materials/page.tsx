@@ -18,37 +18,6 @@ export default async function TeacherMaterialsPage(props: PageProps<"/teacher/ma
   const { page, pageSize, from, to } = pageParams(sp);
   const supabase = await createClient();
 
-  // Fetch batches assigned to this teacher
-  const { data: tb } = await supabase
-    .from("teacher_batches")
-    .select("batch_id")
-    .eq("is_active", true);
-
-  const batchIds = (tb ?? []).map((t) => t.batch_id);
-
-  const { data: rawBatches } = batchIds.length > 0
-    ? await supabase
-        .from("batches")
-        .select("id, name, class_id, classes(id, name), batch_subjects(subjects(id, name))")
-        .in("id", batchIds)
-        .eq("status", "active")
-        .order("name")
-    : { data: [] };
-
-  const batches = rawBatches ?? [];
-  const classMap = new Map<string, { id: string; name: string }>();
-  const subjectMap = new Map<string, { id: string; name: string; class_id: string | null }>();
-
-  for (const b of batches) {
-    if (b.classes) classMap.set(b.classes.id, b.classes);
-    for (const bs of b.batch_subjects ?? []) {
-      if (bs.subjects) subjectMap.set(bs.subjects.id, { ...bs.subjects, class_id: b.class_id });
-    }
-  }
-
-  const classes = Array.from(classMap.values());
-  const subjects = Array.from(subjectMap.values());
-
   const selectedClass = str(sp.class);
   const selectedBatch = str(sp.batch);
   const selectedSubject = str(sp.subject);
@@ -69,8 +38,34 @@ export default async function TeacherMaterialsPage(props: PageProps<"/teacher/ma
   if (selectedBatch) q = q.eq("batch_id", selectedBatch);
   if (selectedSubject) q = q.eq("subject_id", selectedSubject);
 
-  const { data: materials, count, error } = await q;
+  // Assigned batches (with embedded batch data) and the materials list load in parallel.
+  const [{ data: assignments }, { data: materials, count, error }] = await Promise.all([
+    supabase
+      .from("teacher_batches")
+      .select("batches!inner(id, name, class_id, classes(id, name), batch_subjects(subjects(id, name)))")
+      .eq("is_active", true)
+      .eq("batches.status", "active"),
+    q,
+  ]);
   if (error) throw error;
+
+  const seen = new Set<string>();
+  const batches = (assignments ?? [])
+    .map((a) => a.batches)
+    .filter((b) => b && !seen.has(b.id) && seen.add(b.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const classMap = new Map<string, { id: string; name: string }>();
+  const subjectMap = new Map<string, { id: string; name: string; class_id: string | null }>();
+
+  for (const b of batches) {
+    if (b.classes) classMap.set(b.classes.id, b.classes);
+    for (const bs of b.batch_subjects ?? []) {
+      if (bs.subjects) subjectMap.set(bs.subjects.id, { ...bs.subjects, class_id: b.class_id });
+    }
+  }
+
+  const classes = Array.from(classMap.values());
+  const subjects = Array.from(subjectMap.values());
 
   const uploadBtn = (
     <UploadMaterialDialog
