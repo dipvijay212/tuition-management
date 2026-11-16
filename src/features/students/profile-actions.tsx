@@ -105,11 +105,31 @@ export function PhotoUpload({ studentId }: { studentId: string }) {
   );
 }
 
-export function LoginButton({ kind, id, disabledReason }: { kind: "student" | "parent"; id: string; disabledReason?: string }) {
+export function LoginButton({
+  kind,
+  id,
+  disabledReason,
+  label = "Send login invitation",
+}: {
+  kind: "student" | "parent";
+  id: string;
+  disabledReason?: string;
+  label?: string;
+}) {
   const { pending, error, run } = useRun();
   return (
     <span className="inline-flex flex-col items-start">
-      <Button variant="outline" size="sm" disabled={pending || !!disabledReason} title={disabledReason} onClick={() => run(() => createFamilyLogin(kind, id))}>{pending ? <Loader2 className="animate-spin" /> : <KeyRound />} Send login invitation</Button>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={pending || !!disabledReason}
+        title={disabledReason}
+        onClick={() => run(() => createFamilyLogin(kind, id))}
+        className="gap-1.5"
+      >
+        {pending ? <Loader2 className="size-3.5 animate-spin" /> : <KeyRound className="size-3.5" />}
+        {label}
+      </Button>
       {(error || disabledReason) && <span className="mt-1 text-xs text-muted-foreground">{error ?? disabledReason}</span>}
     </span>
   );

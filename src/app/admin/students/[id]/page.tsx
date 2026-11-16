@@ -87,7 +87,6 @@ export default async function StudentProfile(props: PageProps<"/admin/students/[
               <dl className="grid grid-cols-2 gap-4">
                 <Info label="Date of birth" value={formatDate(s.date_of_birth)} />
                 <Info label="Gender" value={titleCase(s.gender)} />
-                <Info label="Blood group" value={s.blood_group} />
                 <Info label="Mobile" value={s.phone} />
                 <Info label="Email" value={s.email} />
                 <Info label="School" value={s.school_name} />
@@ -95,8 +94,17 @@ export default async function StudentProfile(props: PageProps<"/admin/students/[
                 <Info label="Admission date" value={formatDate(s.admission_date)} />
                 <div className="col-span-2"><Info label="Address" value={[s.address, s.city, s.state, s.pin_code].filter(Boolean).join(", ")} /></div>
                 <div className="col-span-2"><Info label="Subjects" value={(subjects.data ?? []).map((x) => x.name).join(", ")} /></div>
-                {s.previous_academics && <div className="col-span-2"><Info label="Previous academics" value={s.previous_academics} /></div>}
-                <div className="col-span-2"><dt className="mb-1 text-xs text-muted-foreground">Student login</dt>{s.profile_id ? <StatusBadge status="active" label="Login enabled" /> : <LoginButton kind="student" id={id} disabledReason={s.email ? undefined : "Add the student's email to invite"} />}</div>
+                <div className="col-span-2">
+                  <dt className="mb-1 text-xs text-muted-foreground">Student login</dt>
+                  {s.profile_id ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge status="active" label="Login enabled" />
+                      <LoginButton kind="student" id={id} label="Resend invitation email" disabledReason={s.email ? undefined : "Add the student's email to invite"} />
+                    </div>
+                  ) : (
+                    <LoginButton kind="student" id={id} disabledReason={s.email ? undefined : "Add the student's email to invite"} />
+                  )}
+                </div>
               </dl>
             </CardContent>
           </Card>
@@ -107,7 +115,16 @@ export default async function StudentProfile(props: PageProps<"/admin/students/[
                 <div key={p.id} className="rounded-lg border p-3">
                   <div className="flex items-center justify-between gap-2"><div className="font-medium">{p.guardians.full_name} <span className="text-sm font-normal text-muted-foreground">· {titleCase(p.relationship)}</span></div><div className="flex gap-1">{p.is_primary && <StatusBadge status="active" label="Primary" tone="primary" />}{p.is_emergency_contact && <StatusBadge status="x" label="Emergency" tone="warning" />}</div></div>
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground"><span className="flex items-center gap-1"><Phone className="size-3.5" />{p.guardians.phone}{p.guardians.alt_phone && `, ${p.guardians.alt_phone}`}</span>{p.guardians.email && <span className="flex items-center gap-1"><Mail className="size-3.5" />{p.guardians.email}</span>}</div>
-                  <div className="mt-3">{p.guardians.profile_id ? <StatusBadge status="active" label="Parent login enabled" /> : <LoginButton kind="parent" id={p.guardians.id} disabledReason={p.guardians.email ? undefined : "Add an email to invite this parent"} />}</div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {p.guardians.profile_id ? (
+                      <>
+                        <StatusBadge status="active" label="Parent login enabled" />
+                        <LoginButton kind="parent" id={p.guardians.id} label="Resend invitation email" disabledReason={p.guardians.email ? undefined : "Add an email to invite this parent"} />
+                      </>
+                    ) : (
+                      <LoginButton kind="parent" id={p.guardians.id} disabledReason={p.guardians.email ? undefined : "Add an email to invite this parent"} />
+                    )}
+                  </div>
                 </div>
               ))}
             </CardContent>

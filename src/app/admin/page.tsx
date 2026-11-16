@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { UserCheck, GraduationCap, Layers, CalendarCheck, Wallet, IndianRupee, TrendingUp, TrendingDown, Cake, Megaphone } from "lucide-react";
+import { UserCheck, GraduationCap, Layers, CalendarCheck, Wallet, IndianRupee, TrendingUp, TrendingDown, Cake, Megaphone, UserPlus, ClipboardList } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdmissionsChart, AttendanceChart, BatchDistributionChart, IncomeExpenseChart, type Monthly } from "@/components/dashboard/charts";
 import { RangePicker } from "@/components/dashboard/range-picker";
@@ -62,6 +63,22 @@ export default async function AdminDashboard(props: PageProps<"/admin">) {
   return (
     <>
       <PageHeader title={`Welcome, ${ctx.profile.full_name.split(" ")[0] || "Admin"}`} description={`${ctx.institute?.name} · ${formatDate(today, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`} actions={<RangePicker from={from} to={to} />} />
+
+      <div className="flex flex-wrap items-center gap-2.5 p-3 rounded-xl border bg-card/80 backdrop-blur-sm shadow-sm">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mr-1">Daily Quick Actions:</span>
+        <Button size="sm" nativeButton={false} render={<Link href="/admin/students/new" />}>
+          <UserPlus className="size-3.5 mr-1" /> New Admission
+        </Button>
+        <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/admin/attendance" />}>
+          <CalendarCheck className="size-3.5 mr-1" /> Take Attendance
+        </Button>
+        <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/admin/fees" />}>
+          <Wallet className="size-3.5 mr-1" /> Collect Fees
+        </Button>
+        <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/admin/examinations" />}>
+          <ClipboardList className="size-3.5 mr-1" /> Create Test
+        </Button>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Active students" value={c.active_students} hint={`${c.total_students} total records`} icon={UserCheck} href="/admin/students?status=active" />

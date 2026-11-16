@@ -36,14 +36,29 @@ export async function loginAction(_: AuthState, form: FormData): Promise<AuthSta
   if (!identifier || !password) return { error: "Enter your mobile number or email and password." };
 
   let email = identifier.toLowerCase();
+  let phone: string | null = null;
   if (!identifier.includes("@")) {
-    const phone = normalizePhone(identifier);
+    phone = normalizePhone(identifier);
     if (!/^\d{10}$/.test(phone)) return { error: GENERIC };
     // Resolve phone -> email server-side (never exposed to the browser).
     const admin = createAdminClient();
     const { data } = await admin.from("profiles").select("email").eq("phone", phone).not("email", "is", null).limit(2);
-    if (!data || data.length !== 1) return { error: GENERIC };
-    email = data[0].email!;
+    if (data && data.length === 1 && data[0].email) {
+      email = data[0].email;
+    } else {
+      // Check guardians by phone
+      const { data: gData } = await admin.from("guardians").select("email").eq("phone", phone).not("email", "is", null).limit(2);
+      if (gData && gData.length === 1 && gData[0].email) {
+        email = gData[0].email.toLowerCase().trim();
+      } else {
+        const { data: sData } = await admin.from("students").select("email").eq("phone", phone).not("email", "is", null).limit(2);
+        if (sData && sData.length === 1 && sData[0].email) {
+          email = sData[0].email.toLowerCase().trim();
+        } else {
+          return { error: GENERIC };
+        }
+      }
+    }
   }
 
   const store = await cookies();
@@ -54,20 +69,57 @@ export async function loginAction(_: AuthState, form: FormData): Promise<AuthSta
   if (error || !data.user) return { error: GENERIC };
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("status, institute_id").eq("id", data.user.id).single();
+  let { data: profile } = await admin.from("profiles").select("id, status, institute_id, phone").eq("id", data.user.id).maybeSingle();
+
+  // If profile row doesn't exist yet, insert basic profile
+  if (!profile) {
+    const { data: newProfile } = await admin.from("profiles").insert({
+      id: data.user.id,
+      email,
+      phone: phone ?? data.user.phone ?? null,
+      status: "active",
+    }).select("id, status, institute_id, phone").single();
+    profile = newProfile;
+  }
+
+  // Fetch roles
+  let roleList: AppRole[] = [];
+  if (profile?.institute_id) {
+    const { data: roles } = await admin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.user.id)
+      .eq("institute_id", profile.institute_id);
+    roleList = (roles ?? []).map((r) => r.role as AppRole);
+  }
+
+  // If no roles found or no institute_id or inactive, run healUserRoles
+  if (roleList.length === 0 || !profile?.institute_id || profile?.status !== "active") {
+    const { healUserRoles } = await import("@/lib/auth/session");
+    const healed = await healUserRoles(data.user.id, email, phone ?? profile?.phone);
+    if (healed.roles.length > 0) {
+      roleList = healed.roles;
+      if (profile) {
+        profile.institute_id = healed.instituteId;
+        profile.status = "active";
+      }
+    }
+  }
+
   if (!profile || profile.status !== "active") {
     await supabase.auth.signOut();
     return { error: STATUS_MESSAGES[profile?.status ?? "pending_activation"] };
   }
-  const { data: roles } = await admin.from("user_roles").select("role").eq("user_id", data.user.id).eq("institute_id", profile.institute_id!);
-  const roleList = (roles ?? []).map((r) => r.role as AppRole);
+
   if (roleList.length === 0) {
     await supabase.auth.signOut();
     return { error: STATUS_MESSAGES.no_role };
   }
 
   await admin.from("profiles").update({ last_login_at: new Date().toISOString() }).eq("id", data.user.id);
-  await admin.from("audit_logs").insert({ institute_id: profile.institute_id, user_id: data.user.id, action: "login", entity: "auth", entity_id: data.user.id });
+  if (profile.institute_id) {
+    await admin.from("audit_logs").insert({ institute_id: profile.institute_id, user_id: data.user.id, action: "login", entity: "auth", entity_id: data.user.id });
+  }
 
   const order: AppRole[] = ["admin", "teacher", "parent", "student"];
   const home = ROLE_HOME[order.find((r) => roleList.includes(r))!];
@@ -86,16 +138,70 @@ export async function forgotPasswordAction(_: AuthState, form: FormData): Promis
   const identifier = String(form.get("identifier") ?? "").trim();
   if (!identifier) return { error: "Enter your email or mobile number." };
   let email: string | null = identifier.includes("@") ? identifier.toLowerCase() : null;
+  const admin = createAdminClient();
+
   if (!email) {
-    const admin = createAdminClient();
-    const { data } = await admin.from("profiles").select("email").eq("phone", normalizePhone(identifier)).limit(1).maybeSingle();
+    const p = normalizePhone(identifier);
+    const { data } = await admin.from("profiles").select("email").eq("phone", p).limit(1).maybeSingle();
     email = data?.email ?? null;
+    if (!email) {
+      const { data: g } = await admin.from("guardians").select("email").eq("phone", p).maybeSingle();
+      email = g?.email ?? null;
+      if (!email) {
+        const { data: s } = await admin.from("students").select("email").eq("phone", p).maybeSingle();
+        email = s?.email ?? null;
+      }
+    }
   }
   if (email) {
-    // Implicit-flow client: the emailed link works on any device (PKCE would require the same browser).
-    const { createClient: createPlain } = await import("@supabase/supabase-js");
-    const plain = createPlain(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { auth: { flowType: "implicit", persistSession: false, autoRefreshToken: false } });
-    await plain.auth.resetPasswordForEmail(email, { redirectTo: `${await siteUrl()}/auth/callback?next=/reset-password` });
+    const site = (await siteUrl()).replace(/\/$/, "");
+    const redirectTo = `${site}/auth/callback?next=/reset-password`;
+
+    // Generate link via admin API so Supabase does NOT send unbranded rate-limited email
+    let linkRes = await admin.auth.admin.generateLink({
+      type: "recovery",
+      email,
+      options: { redirectTo },
+    });
+
+    if (linkRes.error || !linkRes.data?.properties) {
+      linkRes = await admin.auth.admin.generateLink({
+        type: "magiclink",
+        email,
+        options: { redirectTo },
+      });
+    }
+
+    if (linkRes.data?.properties) {
+      const props = linkRes.data.properties;
+      const actionLink = props.hashed_token
+        ? `${site}/auth/callback?token_hash=${props.hashed_token}&type=recovery&next=/reset-password`
+        : props.action_link;
+
+      // Find user and institute for branded template
+      const { data: profile } = await admin
+        .from("profiles")
+        .select("full_name, institutes(name)")
+        .eq("email", email)
+        .maybeSingle();
+
+      const instName = (profile?.institutes as { name?: string } | null)?.name ?? "Tuition Management";
+
+      const { renderPasswordResetEmail, sendEmail } = await import("@/lib/email");
+      const tpl = renderPasswordResetEmail({
+        instituteName: instName,
+        recipientName: profile?.full_name ?? undefined,
+        recipientEmail: email,
+        actionLink,
+      });
+
+      await sendEmail({
+        to: email,
+        subject: tpl.subject,
+        html: tpl.html,
+        text: tpl.text,
+      });
+    }
   }
   // Same response whether or not the account exists (no account enumeration).
   return { message: "If an account exists, a password reset link has been sent to its email address." };
@@ -115,6 +221,12 @@ export async function resetPasswordAction(_: AuthState, form: FormData): Promise
   const admin = createAdminClient();
   // An invited user who sets a password becomes active.
   await admin.from("profiles").update({ status: "active" }).eq("id", claims.claims.sub).eq("status", "pending_activation");
+
+  // Auto-heal / link roles immediately so redirect("/") finds the home portal
+  const { healUserRoles } = await import("@/lib/auth/session");
+  const email = claims.claims.email as string | undefined;
+  await healUserRoles(claims.claims.sub, email);
+
   redirect("/");
 }
 

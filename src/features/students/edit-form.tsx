@@ -23,21 +23,14 @@ export function StudentEditForm({ s, classes, subjects, guardians }: { s: Tables
               <Field label="Full name" name="full_name" required error={errors.full_name} className="md:col-span-2"><Input id="full_name" name="full_name" defaultValue={s.full_name} /></Field>
               <Field label="Date of birth" name="date_of_birth"><Input id="date_of_birth" name="date_of_birth" type="date" defaultValue={s.date_of_birth ?? ""} /></Field>
               <Field label="Gender" name="gender"><NativeSelect id="gender" name="gender" defaultValue={s.gender ?? ""}><option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></NativeSelect></Field>
-              <Field label="Blood group" name="blood_group"><Input id="blood_group" name="blood_group" defaultValue={s.blood_group ?? ""} /></Field>
               <Field label="Mobile" name="phone" error={errors.phone}><Input id="phone" name="phone" defaultValue={s.phone ?? ""} /></Field>
               <Field label="Email" name="email" error={errors.email}><Input id="email" name="email" type="email" defaultValue={s.email ?? ""} /></Field>
               <Field label="School" name="school_name"><Input id="school_name" name="school_name" defaultValue={s.school_name ?? ""} /></Field>
               <Field label="Class" name="class_id"><NativeSelect id="class_id" name="class_id" defaultValue={s.class_id ?? ""}><option value="">—</option>{classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</NativeSelect></Field>
               <Field label="Address" name="address" className="md:col-span-2"><Textarea id="address" name="address" rows={2} defaultValue={s.address ?? ""} /></Field>
-              <Field label="City" name="city"><Input id="city" name="city" defaultValue={s.city ?? ""} /></Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="State" name="state"><Input id="state" name="state" defaultValue={s.state ?? ""} /></Field>
-                <Field label="PIN code" name="pin_code" error={errors.pin_code}><Input id="pin_code" name="pin_code" defaultValue={s.pin_code ?? ""} /></Field>
-              </div>
               <Field label="Subjects" name="subject_ids" className="md:col-span-2">
                 <div className="flex flex-wrap gap-2">{subjects.filter((x) => !x.class_id || x.class_id === s.class_id).map((x) => <label key={x.id} className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm has-checked:border-primary has-checked:bg-primary/5"><input type="checkbox" name="subject_ids" value={x.id} defaultChecked={s.subject_ids.includes(x.id)} className="accent-primary" /> {x.name}</label>)}</div>
               </Field>
-              <Field label="Previous academics" name="previous_academics" className="md:col-span-2"><Textarea id="previous_academics" name="previous_academics" rows={2} defaultValue={s.previous_academics ?? ""} /></Field>
               <div><SubmitButton>Save student</SubmitButton></div>
             </CardContent>
           </Card>

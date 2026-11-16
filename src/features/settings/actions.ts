@@ -76,6 +76,20 @@ export const savePolicies = makeAction({
   },
 });
 
+export const saveEmailSettings = makeAction({
+  roles: ["admin"],
+  schema: z.object({
+    email_enabled: bool,
+    notify_parent_on_absence: bool,
+  }),
+  handler: async (v, ctx) => {
+    const supabase = await createClient();
+    check(await supabase.from("institute_settings").update(v).eq("institute_id", ctx.institute!.id));
+    revalidatePath("/admin/settings");
+    return { ok: true, message: "Email preferences saved" };
+  },
+});
+
 export const saveAcademicYear = makeAction({
   roles: ["admin"],
   schema: z.object({ id: z.string().optional(), name: requiredText("Name", 20), start_date: dateString, end_date: dateString, is_current: bool })
@@ -116,3 +130,86 @@ export async function saveGradingRules(rows: z.input<typeof gradeRow>[]): Promis
     return { ok: false, error: friendlyError(e) };
   }
 }
+
+export const sendTestEmailAction = makeAction({
+  roles: ["admin"],
+  schema: z.object({
+    email: z.string().trim().email("Enter a valid email address"),
+  }),
+  handler: async (v, ctx) => {
+    const { getSmtpConfig, isSmtpConfigured, verifySmtpConnection, renderTestEmail, sendEmail } = await import("@/lib/email");
+
+    if (!isSmtpConfigured()) {
+      const cfg = getSmtpConfig();
+      return {
+        ok: false,
+        error: `SMTP is not configured in .env yet. Please configure SMTP_USER and SMTP_PASS (Host: ${cfg.host}, Port: ${cfg.port}).`,
+      };
+    }
+
+    // 1. Test SMTP handshake & authentication
+    const testConn = await verifySmtpConnection();
+    if (!testConn.ok) {
+      return {
+        ok: false,
+        error: `SMTP Connection test failed: ${testConn.error || testConn.message}`,
+      };
+    }
+
+    // 2. Render test email
+    const emailData = renderTestEmail({
+      recipientEmail: v.email,
+      instituteName: ctx.institute?.name,
+    });
+
+    // 3. Dispatch email
+    const res = await sendEmail({
+      to: v.email,
+      subject: emailData.subject,
+      html: emailData.html,
+      text: emailData.text,
+      instituteId: ctx.institute?.id,
+    });
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: `Failed to dispatch test email: ${res.error || "Unknown error"}`,
+      };
+    }
+
+    return {
+      ok: true,
+      message: `Test email sent successfully to ${v.email}!`,
+    };
+  },
+});
+
+export async function getSmtpStatusAction(): Promise<ActionResult<{
+  configured: boolean;
+  host: string;
+  port: number;
+  user: string;
+  fromName: string;
+  fromEmail: string;
+}>> {
+  try {
+    await assertRole("admin");
+    const { getSmtpConfig } = await import("@/lib/email");
+    const cfg = getSmtpConfig();
+    return {
+      ok: true,
+      data: {
+        configured: cfg.configured,
+        host: cfg.host,
+        port: cfg.port,
+        user: cfg.user ? `${cfg.user.substring(0, 3)}***@${cfg.user.split("@")[1] || ""}` : "",
+        fromName: cfg.fromName,
+        fromEmail: cfg.fromEmail,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: friendlyError(e) };
+  }
+}
+

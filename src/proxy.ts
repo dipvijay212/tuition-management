@@ -41,6 +41,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
   if (signedIn && path === "/login") {
+    // If redirected to /login with an error, do NOT loop back to /
+    if (request.nextUrl.searchParams.has("error")) {
+      return response;
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";

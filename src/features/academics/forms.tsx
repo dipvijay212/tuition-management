@@ -20,13 +20,18 @@ export function ClassDialog({ trigger, years, value }: { trigger: React.ReactEle
           {({ errors }) => (
             <>
               {value && <input type="hidden" name="id" value={value.id} />}
-              <Field label="Class name" name="name" required error={errors.name}><Input id="name" name="name" defaultValue={value?.name} placeholder="Standard 10" /></Field>
-              <Field label="Academic year" name="academic_year_id">
+              <Field label="Class name" name="name" required error={errors.name} hint="e.g. Standard 10, 9th Grade, 12th Science">
+                <Input id="name" name="name" defaultValue={value?.name} placeholder="Standard 10" />
+              </Field>
+              <Field label="Academic year / Session" name="academic_year_id" hint="Select the institute academic year session (e.g. 2025–2026)">
                 <NativeSelect id="academic_year_id" name="academic_year_id" defaultValue={value?.academic_year_id ?? years[0]?.id ?? ""}>
-                  <option value="">All years</option>{years.map((y) => <option key={y.id} value={y.id}>{y.name}</option>)}
+                  <option value="">All years / Ongoing</option>
+                  {years.map((y) => <option key={y.id} value={y.id}>{y.name}</option>)}
                 </NativeSelect>
               </Field>
-              <Field label="Description" name="description"><Textarea id="description" name="description" rows={2} defaultValue={value?.description ?? ""} /></Field>
+              <Field label="Short description / Stream" name="description" hint="Optional notes, stream, or section (e.g. GSEB Board, CBSE)">
+                <Textarea id="description" name="description" rows={2} defaultValue={value?.description ?? ""} placeholder="e.g. State Board Syllabus" />
+              </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Display order" name="sort_order"><Input id="sort_order" name="sort_order" type="number" defaultValue={value?.sort_order ?? 0} /></Field>
                 <Field label="Status" name="status"><NativeSelect id="status" name="status" defaultValue={value?.status ?? "active"}><option value="active">Active</option><option value="inactive">Inactive</option></NativeSelect></Field>

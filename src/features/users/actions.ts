@@ -58,11 +58,54 @@ export async function sendPasswordReset(userId: string): Promise<ActionResult> {
   try {
     const ctx = await assertRole("admin");
     const admin = createAdminClient();
-    const { data: p } = await admin.from("profiles").select("email, institute_id").eq("id", userId).single();
+    const { data: p } = await admin.from("profiles").select("full_name, email, institute_id").eq("id", userId).single();
     if (!p?.email || p.institute_id !== ctx.institute!.id) return { ok: false, error: "This user has no email address." };
-    const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3100";
-    const { error } = await admin.auth.resetPasswordForEmail(p.email, { redirectTo: `${site}/auth/callback?next=/reset-password` });
-    if (error) throw error;
+    const site = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3100").replace(/\/$/, "");
+    const redirectTo = `${site}/auth/callback?next=/reset-password`;
+
+    let linkRes = await admin.auth.admin.generateLink({
+      type: "recovery",
+      email: p.email,
+      options: { redirectTo },
+    });
+
+    if (linkRes.error || !linkRes.data?.properties) {
+      linkRes = await admin.auth.admin.generateLink({
+        type: "magiclink",
+        email: p.email,
+        options: { redirectTo },
+      });
+    }
+
+    const props = linkRes.data?.properties;
+    const actionLink = props?.hashed_token
+      ? `${site}/auth/callback?token_hash=${props.hashed_token}&type=recovery&next=/reset-password`
+      : props?.action_link;
+
+    if (!actionLink) {
+      return { ok: false, error: linkRes.error?.message ?? "Could not generate reset link." };
+    }
+
+    const { renderPasswordResetEmail, sendEmail } = await import("@/lib/email");
+    const tpl = renderPasswordResetEmail({
+      instituteName: ctx.institute?.name,
+      recipientName: p.full_name || undefined,
+      recipientEmail: p.email,
+      actionLink,
+    });
+
+    const sendRes = await sendEmail({
+      to: p.email,
+      subject: tpl.subject,
+      html: tpl.html,
+      text: tpl.text,
+      instituteId: ctx.institute?.id,
+    });
+
+    if (!sendRes.ok) {
+      return { ok: false, error: `Email dispatch failed: ${sendRes.error}` };
+    }
+
     await audit(ctx.institute!.id, ctx.userId, "password_reset_sent", userId, null, null);
     return { ok: true, message: `Reset link sent to ${p.email}` };
   } catch (e) { return { ok: false, error: friendlyError(e) }; }

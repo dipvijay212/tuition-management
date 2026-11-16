@@ -11,7 +11,9 @@ export function SidebarNav({ role, collapsed = false, onNavigate }: { role: AppR
   return (
     <nav className="flex flex-col gap-0.5" aria-label="Main">
       {items.map((item) => {
-        const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(item.href + "/");
+        const active = item.exact
+          ? pathname === item.href
+          : pathname === item.href || pathname.startsWith(item.href + "/") || (item.href === "/admin/students" && pathname.startsWith("/admin/admissions"));
         const Icon = item.icon;
         return (
           <Link

@@ -1,0 +1,371 @@
+import type { Metadata } from "next";
+import {
+  Layers,
+  Users,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  BookOpen,
+  CalendarCheck,
+} from "lucide-react";
+import { requireRole } from "@/lib/auth/session";
+import { createClient } from "@/lib/supabase/server";
+import { PageHeader } from "@/components/shared/page-header";
+import { DataTable } from "@/components/shared/data-table";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FilterBar, SelectFilter, DateFilter } from "@/components/shared/filters";
+import { Button } from "@/components/ui/button";
+import { TakeAttendanceDialog } from "@/features/attendance/take-attendance-dialog";
+import { formatDate, formatTime, todayIn, DAYS } from "@/lib/utilities/format";
+import { pageParams, str } from "@/lib/utilities/query";
+
+export const metadata: Metadata = { title: "Session Attendance" };
+
+export default async function TeacherAttendancePage(props: PageProps<"/teacher/attendance">) {
+  await requireRole("teacher");
+  const sp = await props.searchParams;
+  const supabase = await createClient();
+  const today = todayIn();
+
+  // 1. Fetch batches assigned to this teacher
+  const { data: tb } = await supabase
+    .from("teacher_batches")
+    .select("batch_id")
+    .eq("is_active", true);
+
+  const batchIds = (tb ?? []).map((t) => t.batch_id);
+
+  const { data: rawBatches, error: batchError } = batchIds.length > 0
+    ? await supabase
+        .from("batches")
+        .select(`
+          id, name, room, status, class_days, start_time, end_time, capacity,
+          classes(id, name),
+          student_batches(status),
+          batch_subjects(subjects(id, name))
+        `)
+        .in("id", batchIds)
+        .eq("status", "active")
+        .order("name")
+    : { data: [], error: null };
+
+  if (batchError) throw batchError;
+
+  const batches = rawBatches ?? [];
+
+  // Collect unique subjects for the dialog
+  const subjectMap = new Map<string, { id: string; name: string }>();
+  for (const b of batches) {
+    for (const bs of b.batch_subjects ?? []) {
+      if (bs.subjects) subjectMap.set(bs.subjects.id, bs.subjects);
+    }
+  }
+  const subjectsList = Array.from(subjectMap.values());
+
+  // 2. Fetch today's sessions for these batches
+  const { data: todaySessions } = batchIds.length > 0
+    ? await supabase
+        .from("class_sessions")
+        .select("id, batch_id, session_date, attendance_submitted_at, status")
+        .in("batch_id", batchIds)
+        .eq("session_date", today)
+    : { data: [] };
+
+  const todaySessionByBatch = new Map((todaySessions ?? []).map((s) => [s.batch_id, s]));
+  const todaySessionIds = (todaySessions ?? []).map((s) => s.id);
+
+  // Attendance records for today's sessions
+  const { data: todayAttendanceRecords } = todaySessionIds.length > 0
+    ? await supabase
+        .from("attendance")
+        .select("session_id, student_id, status")
+        .in("session_id", todaySessionIds)
+    : { data: [] };
+
+  const todayStatsBySession = new Map<string, { present: number; absent: number }>();
+  for (const a of todayAttendanceRecords ?? []) {
+    const cur = todayStatsBySession.get(a.session_id) ?? { present: 0, absent: 0 };
+    if (a.status === "present" || a.status === "late") cur.present += 1;
+    else if (a.status === "absent") cur.absent += 1;
+    todayStatsBySession.set(a.session_id, cur);
+  }
+
+  // 3. Attendance History query for teacher's batches (only sessions up to today)
+  const { page, pageSize, from, to } = pageParams(sp);
+  const selectedBatchFilter = str(sp.batch);
+  const selectedDateFilter = str(sp.date);
+
+  let historyQuery = supabase
+    .from("class_sessions")
+    .select(
+      "id, batch_id, session_date, start_time, end_time, room, status, attendance_submitted_at, batches(id, name), subjects(name)",
+      { count: "exact" }
+    )
+    .in("batch_id", batchIds)
+    .lte("session_date", today)
+    .order("session_date", { ascending: false })
+    .range(from, to);
+
+  if (selectedBatchFilter) historyQuery = historyQuery.eq("batch_id", selectedBatchFilter);
+  if (selectedDateFilter) historyQuery = historyQuery.eq("session_date", selectedDateFilter);
+
+  const { data: historySessions, count: historyCount, error: historyError } = batchIds.length > 0
+    ? await historyQuery
+    : { data: [], count: 0, error: null };
+
+  if (historyError) throw historyError;
+
+  const historySessionIds = (historySessions ?? []).map((s) => s.id);
+  const { data: historyAttendanceRecords } = historySessionIds.length > 0
+    ? await supabase
+        .from("attendance")
+        .select("session_id, student_id, status")
+        .in("session_id", historySessionIds)
+    : { data: [] };
+
+  const historyStatsBySession = new Map<string, { total: number; present: number; absent: number }>();
+  for (const a of historyAttendanceRecords ?? []) {
+    const cur = historyStatsBySession.get(a.session_id) ?? { total: 0, present: 0, absent: 0 };
+    cur.total += 1;
+    if (a.status === "present" || a.status === "late") cur.present += 1;
+    else if (a.status === "absent") cur.absent += 1;
+    historyStatsBySession.set(a.session_id, cur);
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Class Attendance"
+        description="Mark and review student attendance for your assigned batches."
+      />
+
+      {/* Teacher's Assigned Batches */}
+      {batches.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-10 text-center">
+          <Layers className="mx-auto size-10 text-muted-foreground/50 mb-2" />
+          <h3 className="text-base font-semibold">No batches assigned</h3>
+          <p className="text-sm text-muted-foreground mt-1">
+            Your institute administrator will assign your teaching batches.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {batches.map((b) => {
+            const enrolledCount = b.student_batches?.filter((sb) => sb.status === "active").length ?? 0;
+            const todaySession = todaySessionByBatch.get(b.id);
+            const todayStats = todaySession ? todayStatsBySession.get(todaySession.id) : null;
+            const isMarkedToday = !!todaySession?.attendance_submitted_at;
+            const subjectNames = b.batch_subjects?.map((bs) => bs.subjects?.name).filter(Boolean).join(", ");
+
+            return (
+              <Card key={b.id} className="overflow-hidden flex flex-col justify-between">
+                <CardHeader className="bg-muted/20 border-b pb-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-base font-bold text-foreground">
+                        {b.name}
+                      </CardTitle>
+                      {b.classes?.name && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {b.classes.name}
+                        </p>
+                      )}
+                    </div>
+                    <StatusBadge status={b.status} />
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                    <div>
+                      <span className="text-muted-foreground block text-[11px] mb-0.5">Schedule</span>
+                      <span className="font-medium text-foreground block">
+                        {b.class_days.map((d) => DAYS[d]).join(", ")}
+                      </span>
+                      <span className="text-muted-foreground text-[11px] flex items-center gap-1 mt-0.5">
+                        <Clock className="size-3" />
+                        {formatTime(b.start_time)} – {formatTime(b.end_time)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[11px] mb-0.5">Students</span>
+                      <span className="font-medium text-foreground flex items-center gap-1">
+                        <Users className="size-3.5 text-muted-foreground" />
+                        {enrolledCount} {enrolledCount === 1 ? "student" : "students"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[11px] mb-0.5">Subject</span>
+                      <span className="font-medium text-foreground flex items-center gap-1">
+                        <BookOpen className="size-3.5 text-muted-foreground" />
+                        {subjectNames || "General"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Today's Status Banner & Action */}
+                  <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-3">
+                    {isMarkedToday ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="size-3.5" /> Marked Today ({todayStats?.present ?? 0} Present, {todayStats?.absent ?? 0} Absent)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                        <AlertCircle className="size-3.5" /> Attendance not taken today
+                      </span>
+                    )}
+
+                    <TakeAttendanceDialog
+                      batches={[{ id: b.id, name: b.name }]}
+                      subjects={subjectsList}
+                      defaultDate={today}
+                      defaultBatchId={b.id}
+                      autoStart={true}
+                      initialSessionId={todaySession?.id}
+                      trigger={
+                        <Button
+                          size="sm"
+                          variant={isMarkedToday ? "outline" : "default"}
+                          className="font-semibold"
+                        >
+                          <CheckCircle2 className="size-3.5 mr-1.5" />
+                          {isMarkedToday ? "Edit Today's Attendance" : "Take Attendance"}
+                        </Button>
+                      }
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Attendance History Section */}
+      <div className="pt-6 border-t space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <CalendarCheck className="size-5 text-primary" />
+            Attendance History
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Previous attendance records for your batch sessions.
+          </p>
+        </div>
+
+        <FilterBar>
+          <SelectFilter
+            param="batch"
+            label="Batch"
+            options={batches.map((b) => ({ value: b.id, label: b.name }))}
+          />
+          <DateFilter param="date" label="Date" />
+        </FilterBar>
+
+        <DataTable
+          rows={historySessions ?? []}
+          rowKey={(r) => r.id}
+          total={historyCount ?? 0}
+          page={page}
+          pageSize={pageSize}
+          empty={{
+            title: "No past attendance records found",
+            description: "Attendance records you submit will appear here.",
+          }}
+          columns={[
+            {
+              key: "batch",
+              header: "Batch Name",
+              cell: (r) => (
+                <div>
+                  <span className="font-semibold text-foreground">{r.batches?.name ?? "—"}</span>
+                  {r.subjects?.name && (
+                    <div className="text-xs text-muted-foreground">{r.subjects.name}</div>
+                  )}
+                </div>
+              ),
+            },
+            {
+              key: "date",
+              header: "Attendance Date",
+              cell: (r) => (
+                <div>
+                  <span className="font-medium">{formatDate(r.session_date)}</span>
+                  {r.session_date === today && (
+                    <span className="ml-2 inline-flex items-center rounded-sm bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                      Today
+                    </span>
+                  )}
+                </div>
+              ),
+            },
+            {
+              key: "total",
+              header: "Total Students",
+              cell: (r) => {
+                const stats = historyStatsBySession.get(r.id);
+                const b = batches.find((x) => x.id === r.batch_id);
+                const total = stats?.total ?? (b?.student_batches?.filter((sb) => sb.status === "active").length ?? 0);
+                return <span className="font-medium tabular-nums">{total}</span>;
+              },
+            },
+            {
+              key: "present",
+              header: "Present",
+              cell: (r) => {
+                const stats = historyStatsBySession.get(r.id);
+                if (!stats || !r.attendance_submitted_at) return <span className="text-xs text-muted-foreground">—</span>;
+                return (
+                  <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                    {stats.present}
+                  </span>
+                );
+              },
+            },
+            {
+              key: "absent",
+              header: "Absent",
+              cell: (r) => {
+                const stats = historyStatsBySession.get(r.id);
+                if (!stats || !r.attendance_submitted_at) return <span className="text-xs text-muted-foreground">—</span>;
+                return (
+                  <span
+                    className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums ${
+                      stats.absent > 0
+                        ? "bg-destructive/10 text-destructive"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {stats.absent}
+                  </span>
+                );
+              },
+            },
+            {
+              key: "action",
+              header: "",
+              className: "text-right",
+              cell: (r) => {
+                const isMarked = !!r.attendance_submitted_at;
+                return (
+                  <TakeAttendanceDialog
+                    batches={batches.map((x) => ({ id: x.id, name: x.name }))}
+                    subjects={subjectsList}
+                    defaultDate={r.session_date}
+                    defaultBatchId={r.batch_id}
+                    initialSessionId={r.id}
+                    trigger={
+                      <Button variant={isMarked ? "outline" : "default"} size="sm">
+                        {isMarked ? "View / Edit Attendance" : "Take Attendance"}
+                      </Button>
+                    }
+                  />
+                );
+              },
+            },
+          ]}
+        />
+      </div>
+    </div>
+  );
+}

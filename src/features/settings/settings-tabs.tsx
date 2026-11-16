@@ -1,6 +1,6 @@
 "use client";
 import { useState, useTransition } from "react";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,14 +13,17 @@ import { ActionForm, Field, NativeSelect } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDate, DAYS } from "@/lib/utilities/format";
-import { saveAcademicYear, saveGradingRules, saveInstituteProfile, savePolicies } from "./actions";
+import { saveAcademicYear, saveEmailSettings, saveGradingRules, saveInstituteProfile, savePolicies } from "./actions";
+import { TestEmailDialog } from "./test-email-dialog";
 import type { Tables } from "@/types/database";
+import type { SmtpStatus } from "@/lib/email/mailer";
 
 type Props = {
   institute: Tables<"institutes"> & { logo_url: string | null };
   settings: Tables<"institute_settings">;
   years: Tables<"academic_years">[];
   grades: Tables<"grading_rules">[];
+  smtpConfig?: SmtpStatus;
 };
 
 const TIMEZONES = ["Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Europe/London", "America/New_York", "UTC"];
@@ -34,13 +37,14 @@ function Toggle({ name, label, defaultChecked, hint }: { name: string; label: st
   );
 }
 
-export function SettingsTabs({ institute, settings: s, years, grades }: Props) {
+export function SettingsTabs({ institute, settings: s, years, grades, smtpConfig }: Props) {
   return (
     <Tabs defaultValue="profile" className="gap-6">
       <TabsList className="flex-wrap">
         <TabsTrigger value="profile">Institute profile</TabsTrigger>
         <TabsTrigger value="years">Academic years</TabsTrigger>
         <TabsTrigger value="policies">Fees & policies</TabsTrigger>
+        <TabsTrigger value="email">Email &amp; SMTP</TabsTrigger>
         <TabsTrigger value="grading">Grading</TabsTrigger>
       </TabsList>
 
@@ -156,6 +160,104 @@ export function SettingsTabs({ institute, settings: s, years, grades }: Props) {
             </>
           )}
         </ActionForm>
+      </TabsContent>
+
+      <TabsContent value="email">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="size-5 text-primary" />
+                  Nodemailer SMTP Email Service
+                </CardTitle>
+                <CardDescription>
+                  Outbound email transport used for sending fee receipts, absence alerts, and admission notifications.
+                </CardDescription>
+              </div>
+              <TestEmailDialog isConfigured={smtpConfig?.configured ?? false} defaultEmail={institute.email ?? ""} />
+            </CardHeader>
+            <CardContent className="space-y-4 pt-2">
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">SMTP Status</div>
+                  <div className="mt-1 flex items-center gap-1.5 font-medium">
+                    {smtpConfig?.configured ? (
+                      <>
+                        <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-emerald-400">Configured &amp; Active</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="size-2 rounded-full bg-amber-500" />
+                        <span className="text-amber-400">Needs .env Credentials</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">Server Host</div>
+                  <div className="mt-1 font-mono text-sm font-semibold">{smtpConfig?.host ?? "smtp.gmail.com"}</div>
+                </div>
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">Port &amp; Security</div>
+                  <div className="mt-1 font-mono text-sm font-semibold">{smtpConfig?.port ?? 587} {smtpConfig?.secure ? "(SSL)" : "(TLS/STARTTLS)"}</div>
+                </div>
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">Sender Name</div>
+                  <div className="mt-1 text-sm font-medium truncate">{smtpConfig?.fromName ?? institute.name}</div>
+                </div>
+              </div>
+
+              {smtpConfig?.configured && (
+                <div className="rounded-lg border bg-card p-3 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span>Authenticated as: </span>
+                    <strong className="text-foreground">{smtpConfig.user}</strong>
+                  </div>
+                  <div>
+                    <span>From address: </span>
+                    <strong className="text-foreground">{smtpConfig.fromEmail}</strong>
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-xs text-muted-foreground space-y-2">
+                <div className="font-semibold text-foreground flex items-center gap-1.5">
+                  💡 How to configure Gmail SMTP (for tuition owners):
+                </div>
+                <ol className="list-decimal pl-4 space-y-1.5">
+                  <li>Log in to your tuition Gmail account and open <strong>Google Account Settings &rarr; Security</strong>.</li>
+                  <li>Ensure <strong>2-Step Verification</strong> is switched ON.</li>
+                  <li>In the search bar at the top, type <strong>&ldquo;App passwords&rdquo;</strong>, create a password named &ldquo;Tuition App&rdquo;, and copy the generated 16-letter code.</li>
+                  <li>In your server <code className="text-primary font-mono">.env</code> file, set <code className="text-primary font-mono">SMTP_USER=your-email@gmail.com</code> and <code className="text-primary font-mono">SMTP_PASS=your-16-letter-code</code>.</li>
+                  <li>Click <strong>&ldquo;Send Test Email&rdquo;</strong> above to verify your setup!</li>
+                </ol>
+              </div>
+            </CardContent>
+          </Card>
+
+          <ActionForm action={saveEmailSettings} className="space-y-6">
+            {() => (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Email Notification Triggers</CardTitle>
+                    <CardDescription>Control which events automatically dispatch emails to students and parents.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-4 md:grid-cols-2">
+                    <Toggle name="email_enabled" label="Enable all email notifications" defaultChecked={s.email_enabled} hint="When disabled, all outbound automated emails are paused system-wide." />
+                    <Toggle name="notify_parent_on_absence" label="Email parents immediately on student absence" defaultChecked={s.notify_parent_on_absence} hint="Sends an immediate alert when attendance is marked absent." />
+                    <div className="md:col-span-2 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                      ℹ️ <strong>Fee Receipts:</strong> When email notifications are enabled, payment receipts with a breakdown and balance snapshot are emailed automatically to students and parents upon fee collection.
+                    </div>
+                  </CardContent>
+                </Card>
+                <SubmitButton pendingText="Saving…">Save email preferences</SubmitButton>
+              </>
+            )}
+          </ActionForm>
+        </div>
       </TabsContent>
 
       <TabsContent value="grading"><GradingEditor initial={grades} /></TabsContent>

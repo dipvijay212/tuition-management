@@ -30,7 +30,7 @@ export type AdmissionOptions = {
 
 const STEPS = ["Student", "Parents", "Academic", "Fees", "Review"] as const;
 const STEP_FIELDS: Path<AdmissionInput>[][] = [
-  ["full_name", "date_of_birth", "gender", "phone", "email", "pin_code"],
+  ["full_name", "date_of_birth", "gender", "phone", "email"],
   ["guardians"],
   ["admission_date", "class_id", "batch_ids", "admission_no"],
   ["fees"],
@@ -118,15 +118,9 @@ export function AdmissionWizard({ o }: { o: AdmissionOptions }) {
             <div className="space-y-1.5 md:col-span-2"><Label htmlFor="full_name">Student full name <span className="text-destructive">*</span></Label><Input id="full_name" {...register("full_name")} aria-invalid={!!errors.full_name} /><Err msg={errors.full_name?.message} /></div>
             <div className="space-y-1.5"><Label htmlFor="date_of_birth">Date of birth</Label><Input id="date_of_birth" type="date" max={o.today} {...register("date_of_birth")} /><Err msg={errors.date_of_birth?.message} /></div>
             <div className="space-y-1.5"><Label htmlFor="gender">Gender</Label><select id="gender" className={selectClass} {...register("gender")}><option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></div>
-            <div className="space-y-1.5"><Label htmlFor="blood_group">Blood group</Label><select id="blood_group" className={selectClass} {...register("blood_group")}><option value="">—</option>{["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map((b) => <option key={b}>{b}</option>)}</select></div>
             <div className="space-y-1.5"><Label htmlFor="phone">Student mobile (optional)</Label><Input id="phone" type="tel" {...register("phone")} /><Err msg={errors.phone?.message} /></div>
-            <div className="space-y-1.5 md:col-span-2"><Label htmlFor="email">Student email (optional)</Label><Input id="email" type="email" {...register("email")} /><Err msg={errors.email?.message} /><p className="text-xs text-muted-foreground">Needed only if the student will have their own login.</p></div>
-            <div className="space-y-1.5 md:col-span-2"><Label htmlFor="address">Address</Label><Textarea id="address" rows={2} {...register("address")} /></div>
-            <div className="space-y-1.5"><Label htmlFor="city">City</Label><Input id="city" {...register("city")} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label htmlFor="state">State</Label><Input id="state" {...register("state")} /></div>
-              <div className="space-y-1.5"><Label htmlFor="pin_code">PIN code</Label><Input id="pin_code" inputMode="numeric" maxLength={6} {...register("pin_code")} /><Err msg={errors.pin_code?.message} /></div>
-            </div>
+            <div className="space-y-1.5"><Label htmlFor="email">Student email (optional)</Label><Input id="email" type="email" {...register("email")} /><Err msg={errors.email?.message} /></div>
+            <div className="space-y-1.5 md:col-span-2"><Label htmlFor="address">Address (optional)</Label><Textarea id="address" rows={2} {...register("address")} placeholder="Residential address" /></div>
           </CardContent>
         </Card>
       )}
@@ -189,7 +183,6 @@ export function AdmissionWizard({ o }: { o: AdmissionOptions }) {
                 <div className="flex flex-wrap gap-2">{classSubjects.map((s) => <label key={s.id} className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm has-checked:border-primary has-checked:bg-primary/5"><input type="checkbox" value={s.id} {...register("subject_ids")} className="accent-primary" /> {s.name}</label>)}</div>
               )}
             </div>
-            <div className="space-y-1.5 md:col-span-2"><Label htmlFor="previous_academics">Previous academic information</Label><Textarea id="previous_academics" rows={2} {...register("previous_academics")} placeholder="Optional: last school, marks, etc." /></div>
           </CardContent>
         </Card>
       )}

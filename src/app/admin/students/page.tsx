@@ -35,7 +35,7 @@ export default async function StudentsPage(props: PageProps<"/admin/students">) 
     supabase.from("batches").select("id, name").eq("status", "active").order("name"),
   ]);
   if (error) throw error;
-  const newBtn = <Button nativeButton={false} render={<Link href="/admin/admissions" />}><UserPlus /> New admission</Button>;
+  const newBtn = <Button nativeButton={false} render={<Link href="/admin/students/new" />}><UserPlus /> New admission</Button>;
   return (
     <>
       <PageHeader title="Students" description={`${count ?? 0} student record(s)`} actions={newBtn} />

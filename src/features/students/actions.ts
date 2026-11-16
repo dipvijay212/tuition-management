@@ -62,6 +62,65 @@ export async function admitStudent(input: AdmissionInput): Promise<ActionResult<
       } catch (e) { notes.push(`Student login not created: ${(e as Error).message}`); }
     }
   }
+
+  // Safe background trigger for admission confirmation email
+  try {
+    const welcomeRecipients: string[] = [];
+    if (v.email) welcomeRecipients.push(v.email);
+    if (primary.email && !welcomeRecipients.includes(primary.email)) {
+      welcomeRecipients.push(primary.email);
+    }
+
+    if (welcomeRecipients.length > 0) {
+      const { data: stSettings } = await supabase
+        .from("institute_settings")
+        .select("email_enabled")
+        .eq("institute_id", ctx.institute!.id)
+        .maybeSingle();
+
+      if (stSettings?.email_enabled) {
+        const { renderAdmissionWelcomeEmail, sendEmail } = await import("@/lib/email");
+        let className: string | null = null;
+        if (v.class_id) {
+          const { data: c } = await supabase.from("classes").select("name").eq("id", v.class_id).maybeSingle();
+          className = c?.name ?? null;
+        }
+
+        let batchNames: string[] = [];
+        if (v.batch_ids && v.batch_ids.length > 0) {
+          const { data: bList } = await supabase.from("batches").select("name").in("id", v.batch_ids);
+          batchNames = (bList ?? []).map((b) => b.name);
+        }
+
+        const { data: instData } = await supabase
+          .from("institutes")
+          .select("phone, email")
+          .eq("id", ctx.institute!.id)
+          .maybeSingle();
+
+        const tpl = renderAdmissionWelcomeEmail({
+          instituteName: ctx.institute?.name,
+          institutePhone: instData?.phone ?? null,
+          instituteEmail: instData?.email ?? null,
+          studentName: v.full_name,
+          admissionNo: result.admission_no,
+          className,
+          batchNames,
+        });
+
+        await sendEmail({
+          to: welcomeRecipients,
+          subject: tpl.subject,
+          html: tpl.html,
+          text: tpl.text,
+          instituteId: ctx.institute?.id,
+        });
+      }
+    }
+  } catch (emailErr) {
+    console.error("[Admission Welcome Email Trigger Failed]", emailErr);
+  }
+
   revalidatePath("/admin/students");
   return { ok: true, message: `Admitted with number ${result.admission_no}`, data: { id: result.student_id, admission_no: result.admission_no, notes } };
 }
@@ -150,24 +209,138 @@ export async function createFamilyLogin(kind: "student" | "parent", id: string):
     const ctx = await assertRole("admin");
     const supabase = await createClient();
     const admin = createAdminClient();
+    const inst = ctx.institute!.id;
+    const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3100";
+    const redirectTo = `${site}/auth/callback?next=/reset-password`;
+
     if (kind === "student") {
       const { data: s } = await supabase.from("students").select("id, full_name, email, phone, profile_id").eq("id", id).single();
       if (!s) return { ok: false, error: "Student not found." };
-      if (s.profile_id) return { ok: false, error: "This student already has a login." };
       if (!s.email) return { ok: false, error: "Add the student's email first." };
-      const acc = await provisionAccount(ctx, { email: s.email, phone: s.phone, fullName: s.full_name, role: "student", mode: "invite" });
-      await admin.from("students").update({ profile_id: acc.userId }).eq("id", id);
+
+      if (!s.profile_id) {
+        const acc = await provisionAccount(ctx, { email: s.email, phone: s.phone, fullName: s.full_name, role: "student", mode: "invite" });
+        await admin.from("students").update({ profile_id: acc.userId }).eq("id", id);
+        revalidatePath(`/admin/students/${id}`);
+        return { ok: true, message: `Invitation sent to ${s.email}!` };
+      }
+
+      // Profile already linked: generate link and send/resend email
+      let actionLink: string | null = null;
+      const linkRes = await admin.auth.admin.generateLink({
+        type: "magiclink",
+        email: s.email,
+        options: { data: { full_name: s.full_name }, redirectTo },
+      });
+
+      const props = linkRes.data?.properties;
+      if (linkRes.error || !props?.action_link) {
+        const recRes = await admin.auth.admin.generateLink({
+          type: "recovery",
+          email: s.email,
+          options: { redirectTo },
+        });
+        const recProps = recRes.data?.properties;
+        if (recRes.error || !recProps?.action_link) {
+          return { ok: false, error: linkRes.error?.message ?? recRes.error?.message ?? "Could not generate invitation link." };
+        }
+        actionLink = recProps.hashed_token
+          ? `${site}/auth/callback?token_hash=${recProps.hashed_token}&type=recovery&next=/reset-password`
+          : recProps.action_link;
+      } else {
+        actionLink = props.hashed_token
+          ? `${site}/auth/callback?token_hash=${props.hashed_token}&type=recovery&next=/reset-password`
+          : props.action_link;
+      }
+
+      const { renderInvitationEmail, sendEmail } = await import("@/lib/email");
+      const tpl = renderInvitationEmail({
+        instituteName: ctx.institute?.name,
+        recipientName: s.full_name,
+        recipientEmail: s.email,
+        role: "student",
+        actionLink,
+      });
+
+      const sendRes = await sendEmail({
+        to: s.email,
+        subject: tpl.subject,
+        html: tpl.html,
+        text: tpl.text,
+        instituteId: inst,
+      });
+
+      if (!sendRes.ok) {
+        return { ok: false, error: `Email dispatch failed: ${sendRes.error}` };
+      }
+
       revalidatePath(`/admin/students/${id}`);
-      return { ok: true, message: acc.invited ? "Invitation emailed to the student" : "Linked to existing login" };
+      return { ok: true, message: `Invitation emailed to ${s.email}!` };
     }
+
+    // Parent / Guardian
     const { data: g } = await supabase.from("guardians").select("id, full_name, email, phone, profile_id").eq("id", id).single();
     if (!g) return { ok: false, error: "Parent not found." };
-    if (g.profile_id) return { ok: false, error: "This parent already has a login." };
     if (!g.email) return { ok: false, error: "Add the parent's email first." };
-    const acc = await provisionAccount(ctx, { email: g.email, phone: g.phone, fullName: g.full_name, role: "parent", mode: "invite" });
-    await admin.from("guardians").update({ profile_id: acc.userId }).eq("id", id);
+
+    if (!g.profile_id) {
+      const acc = await provisionAccount(ctx, { email: g.email, phone: g.phone, fullName: g.full_name, role: "parent", mode: "invite" });
+      await admin.from("guardians").update({ profile_id: acc.userId }).eq("id", id);
+      revalidatePath("/admin/students", "layout");
+      return { ok: true, message: `Invitation sent to ${g.email}!` };
+    }
+
+    // Parent already linked: generate link and send/resend email
+    let actionLink: string | null = null;
+    const linkRes = await admin.auth.admin.generateLink({
+      type: "magiclink",
+      email: g.email,
+      options: { data: { full_name: g.full_name }, redirectTo },
+    });
+
+    const props = linkRes.data?.properties;
+    if (linkRes.error || !props?.action_link) {
+      const recRes = await admin.auth.admin.generateLink({
+        type: "recovery",
+        email: g.email,
+        options: { redirectTo },
+      });
+      const recProps = recRes.data?.properties;
+      if (recRes.error || !recProps?.action_link) {
+        return { ok: false, error: linkRes.error?.message ?? recRes.error?.message ?? "Could not generate invitation link." };
+      }
+      actionLink = recProps.hashed_token
+        ? `${site}/auth/callback?token_hash=${recProps.hashed_token}&type=recovery&next=/reset-password`
+        : recProps.action_link;
+    } else {
+      actionLink = props.hashed_token
+        ? `${site}/auth/callback?token_hash=${props.hashed_token}&type=recovery&next=/reset-password`
+        : props.action_link;
+    }
+
+    const { renderInvitationEmail, sendEmail } = await import("@/lib/email");
+    const tpl = renderInvitationEmail({
+      instituteName: ctx.institute?.name,
+      recipientName: g.full_name,
+      recipientEmail: g.email,
+      role: "parent",
+      actionLink,
+    });
+
+    const sendRes = await sendEmail({
+      to: g.email,
+      subject: tpl.subject,
+      html: tpl.html,
+      text: tpl.text,
+      instituteId: inst,
+    });
+
+    if (!sendRes.ok) {
+      return { ok: false, error: `Email dispatch failed: ${sendRes.error}` };
+    }
+
     revalidatePath("/admin/students", "layout");
-    return { ok: true, message: acc.invited ? "Invitation emailed to the parent" : "Linked to the parent's existing login" };
+    return { ok: true, message: `Invitation emailed to ${g.email}!` };
   } catch (e) { return { ok: false, error: friendlyError(e) }; }
 }
 
