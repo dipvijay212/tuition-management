@@ -46,7 +46,7 @@ export const academicStep = z.object({
 export const feeLine = z.object({
   fee_structure_id: z.string().optional(),
   description: z.string().trim().min(1, "Description is required"),
-  category: z.enum(["tuition", "admission", "registration", "study_material", "other"]),
+  category: z.enum(["tuition", "admission", "registration", "study_material", "other"]).default("tuition"),
   fee_type: z.enum(["monthly", "quarterly", "half_yearly", "yearly", "course", "custom"]),
   base_amount: z.coerce.number().positive("Amount must be greater than zero").refine((n) => Math.round(n * 100) === n * 100, "At most 2 decimals"),
   installments: z.coerce.number().int().min(1).max(60),

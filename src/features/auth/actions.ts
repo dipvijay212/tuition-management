@@ -88,7 +88,7 @@ export async function resetPasswordAction(_: AuthState, form: FormData): Promise
   redirect("/");
 }
 
-// ---------- First-run setup: only works while no institute exists ----------
+// ---------- Institute registration / setup ----------
 export async function isSetupComplete() {
   const r = await api<{ complete: boolean }>("/auth/setup-status", { token: null });
   return r.complete;
@@ -98,7 +98,7 @@ export async function setupAction(_: AuthState, form: FormData): Promise<AuthSta
   const f = Object.fromEntries(form) as Record<string, string>;
   let res: IssuedSession & { home: string };
   try {
-    res = await api("/auth/setup", {
+    res = await api("/auth/register", {
       method: "POST",
       token: null,
       body: { institute_name: f.institute_name ?? "", full_name: f.full_name ?? "", email: f.email ?? "", phone: f.phone ?? "", password: f.password ?? "", ...(await clientMeta()) },
@@ -109,3 +109,5 @@ export async function setupAction(_: AuthState, form: FormData): Promise<AuthSta
   await setSessionCookie(res);
   redirect(res.home);
 }
+
+export const registerInstituteAction = setupAction;

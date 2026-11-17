@@ -17,9 +17,20 @@ export default async function LoginPage(props: PageProps<"/login">) {
         <p className="text-sm text-muted-foreground">Sign in to your admin, teacher, student or parent account.</p>
       </div>
       <LoginForm next={typeof sp.next === "string" ? sp.next : undefined} initialError={error} />
-      <p className="text-center text-xs text-muted-foreground">
-        Don&apos;t have an account? Accounts are created by your institute. <Link className="text-primary hover:underline" href="/forgot-password">Activate or reset</Link>
-      </p>
+      <div className="space-y-2 text-center text-xs text-muted-foreground">
+        <p>
+          New institute?{" "}
+          <Link className="font-medium text-primary hover:underline" href="/register">
+            Register your institute
+          </Link>
+        </p>
+        <p>
+          Don&apos;t have an account? Accounts are created by your institute.{" "}
+          <Link className="text-primary hover:underline" href="/forgot-password">
+            Activate or reset
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }
