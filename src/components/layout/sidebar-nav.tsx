@@ -1,13 +1,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAVIGATION } from "@/lib/permissions/navigation";
-import type { AppRole } from "@/lib/auth/session";
+import { visibleNav } from "@/lib/permissions/navigation";
+import type { AppRole, Feature } from "@/lib/auth/session";
 import { cn } from "@/lib/utils";
 
-export function SidebarNav({ role, collapsed = false, onNavigate }: { role: AppRole; collapsed?: boolean; onNavigate?: () => void }) {
+export function SidebarNav({ role, features, collapsed = false, onNavigate }: { role: AppRole; features: Feature[]; collapsed?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const items = NAVIGATION[role].filter((i) => i.ready);
+  const items = visibleNav(role, features);
   return (
     <nav className="flex flex-col gap-0.5" aria-label="Main">
       {items.map((item) => {

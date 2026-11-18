@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { SubmitButton } from "@/components/shared/submit-button";
 import { FormAlert } from "@/components/shared/form-alert";
 
-export function LoginForm({ next, initialError }: { next?: string; initialError?: string }) {
+export function LoginForm({ next, initialError, defaultCode }: { next?: string; initialError?: string; defaultCode?: string }) {
   const [state, action] = useActionState<AuthState, FormData>(loginAction, initialError ? { error: initialError } : undefined);
   const [show, setShow] = useState(false);
   return (
@@ -17,8 +17,24 @@ export function LoginForm({ next, initialError }: { next?: string; initialError?
       <input type="hidden" name="next" value={next ?? ""} />
       <FormAlert error={state?.error} />
       <div className="space-y-2">
+        <Label htmlFor="institute_code">Institute code</Label>
+        <Input
+          id="institute_code"
+          name="institute_code"
+          required
+          defaultValue={defaultCode}
+          autoComplete="organization"
+          autoCapitalize="characters"
+          spellCheck={false}
+          maxLength={14}
+          placeholder="e.g. SVCC2026"
+          className="h-11 font-mono tracking-wider uppercase placeholder:font-sans placeholder:tracking-normal placeholder:normal-case"
+        />
+        <p className="text-xs text-muted-foreground">Given by your institute. It is saved on this device after you sign in.</p>
+      </div>
+      <div className="space-y-2">
         <Label htmlFor="identifier">Mobile number or email</Label>
-        <Input id="identifier" name="identifier" autoComplete="username" required placeholder="98765 43210 or you@example.com" className="h-11" />
+        <Input id="identifier" name="identifier" autoComplete="username" required placeholder="98765 43210 or you@example.com" className="h-11" autoFocus={!!defaultCode} />
       </div>
       <div className="space-y-2">
         <div className="flex items-center justify-between">

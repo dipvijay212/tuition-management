@@ -11,7 +11,11 @@ npm run db:start        # local Supabase in Docker (applies supabase/migrations)
 npm run dev             # http://localhost:3100
 ```
 
-The first visit goes to `/setup`, which creates the institute and the owner (admin) account. The page only works while no institute exists.
+Multi-institute SaaS: new institutes sign up at `/register` (free trial). Everyone signs in at `/login` with their
+**institute code** (remembered on the device; share links like `/login?code=DEMO2026`). Platform admins sign in at
+`/platform/login` and manage institutes, plans and subscriptions at `/platform`. Admins see their plan, usage and
+renewal contacts at `/admin/subscription`; features not in the plan are hidden from the sidebar and show an upgrade
+notice (`src/components/shared/feature-gate.tsx`).
 Local emails (invitations, password resets) are captured by Mailpit at http://127.0.0.1:54324.
 
 | Script | Purpose |

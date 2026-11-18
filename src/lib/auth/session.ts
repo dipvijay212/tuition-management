@@ -12,6 +12,21 @@ export const ROLE_HOME: Record<AppRole, string> = {
   parent: "/parent",
 };
 
+export type Feature = "exams" | "homework" | "materials";
+/** trial/active/grace = full access; expired = read-only; suspended = blocked by the platform. */
+export type Access = "trial" | "active" | "grace" | "expired" | "suspended";
+export type SubscriptionInfo = {
+  access: Access;
+  readOnly: boolean;
+  status: "trialing" | "active" | "cancelled" | null;
+  plan: { code: string; name: string } | null;
+  billingCycle: "monthly" | "yearly" | null;
+  endsAt: string | null;
+  daysLeft: number | null;
+  features: Feature[];
+  limits: { students: number | null; teachers: number | null; batches: number | null; storageMb: number | null };
+};
+
 export type SessionContext = {
   userId: string;
   email: string | null;
@@ -25,8 +40,11 @@ export type SessionContext = {
     institute_id: string | null;
   };
   roles: AppRole[];
-  institute: { id: string; name: string; logo_path: string | null } | null;
+  institute: { id: string; name: string; logo_path: string | null; code: string } | null;
+  subscription: SubscriptionInfo | null;
   timezone: string;
+  /** Platform staff (super admin) session. */
+  platform: boolean;
 };
 
 /**
@@ -54,6 +72,8 @@ export function primaryRole(s: SessionContext): AppRole | null {
 export async function requireRole(...allowed: AppRole[]): Promise<SessionContext> {
   const s = await getSession();
   if (!s) redirect("/login");
+  if (s.platform) redirect("/platform");
+  if (s.subscription?.access === "suspended") redirect("/login?error=institute_suspended");
   if (s.profile.status !== "active") redirect(`/login?error=${s.profile.status}`);
   if (!s.roles.some((r) => allowed.includes(r))) {
     const home = primaryRole(s);
@@ -70,3 +90,19 @@ export async function assertRole(...allowed: AppRole[]): Promise<SessionContext>
   }
   return s;
 }
+
+/** Guard for the platform (super admin) portal. */
+export async function requirePlatform(): Promise<SessionContext> {
+  const s = await getSession();
+  if (!s?.platform) redirect("/platform/login");
+  return s;
+}
+
+export async function assertPlatform(): Promise<SessionContext> {
+  const s = await getSession();
+  if (!s?.platform) throw new Error("You are not authorized to perform this action");
+  return s;
+}
+
+/** Plan feature check (pages/nav). The API enforces the same rule. */
+export const hasFeature = (s: SessionContext | null, f: Feature) => !!s?.subscription?.features.includes(f);
