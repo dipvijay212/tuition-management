@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field, NativeSelect } from "@/components/shared/form";
 import { createHomeworkAction } from "./actions";
@@ -144,9 +145,8 @@ export function AssignHomeworkDialog({
           </Field>
 
           <Field label="Due Date" name="due_date" required>
-            <Input
+            <DateInput
               id="due_date"
-              type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
               required

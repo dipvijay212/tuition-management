@@ -4,6 +4,7 @@ import { Ban, CalendarPlus, Pencil, PlayCircle, Settings2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionForm, Field, NativeSelect } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
@@ -115,11 +116,11 @@ export function EditSubscriptionDialog({ instituteId, plans, sub }: { instituteI
               </div>
               {status === "trialing" ? (
                 <Field label="Trial ends after" name="trial_ends_at" required error={errors.trial_ends_at}>
-                  <Input id="trial_ends_at" name="trial_ends_at" type="date" defaultValue={lastDay(sub?.trial_ends_at ?? null)} />
+                  <DateInput id="trial_ends_at" name="trial_ends_at" defaultValue={lastDay(sub?.trial_ends_at ?? null)} />
                 </Field>
               ) : (
                 <Field label="Paid until (inclusive)" name="current_period_end" error={errors.current_period_end} hint="Leave empty for no end date.">
-                  <Input id="current_period_end" name="current_period_end" type="date" defaultValue={day(sub?.current_period_end ?? null)} />
+                  <DateInput id="current_period_end" name="current_period_end" defaultValue={day(sub?.current_period_end ?? null)} />
                 </Field>
               )}
               <Field label="Grace days after end" name="grace_days" error={errors.grace_days}>

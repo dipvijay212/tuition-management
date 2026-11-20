@@ -1,12 +1,13 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useFieldArray, useForm, useWatch, type Path } from "react-hook-form";
+import { Controller, useFieldArray, useForm, useWatch, type Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, ChevronLeft, ChevronRight, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -116,7 +117,7 @@ export function AdmissionWizard({ o }: { o: AdmissionOptions }) {
           <CardHeader><CardTitle>Student information</CardTitle></CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5 md:col-span-2"><Label htmlFor="full_name">Student full name <span className="text-destructive">*</span></Label><Input id="full_name" {...register("full_name")} aria-invalid={!!errors.full_name} /><Err msg={errors.full_name?.message} /></div>
-            <div className="space-y-1.5"><Label htmlFor="date_of_birth">Date of birth</Label><Input id="date_of_birth" type="date" max={o.today} {...register("date_of_birth")} /><Err msg={errors.date_of_birth?.message} /></div>
+            <div className="space-y-1.5"><Label htmlFor="date_of_birth">Date of birth</Label><Controller control={control} name="date_of_birth" render={({ field }) => <DateInput id="date_of_birth" max={o.today} name={field.name} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value)} onBlur={field.onBlur} aria-invalid={!!errors.date_of_birth} />} /><Err msg={errors.date_of_birth?.message} /></div>
             <div className="space-y-1.5"><Label htmlFor="gender">Gender</Label><select id="gender" className={selectClass} {...register("gender")}><option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></div>
             <div className="space-y-1.5"><Label htmlFor="phone">Student mobile (optional)</Label><Input id="phone" type="tel" {...register("phone")} /><Err msg={errors.phone?.message} /></div>
             <div className="space-y-1.5"><Label htmlFor="email">Student email (optional)</Label><Input id="email" type="email" {...register("email")} /><Err msg={errors.email?.message} /></div>
@@ -157,7 +158,7 @@ export function AdmissionWizard({ o }: { o: AdmissionOptions }) {
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5"><Label htmlFor="class_id">Class <span className="text-destructive">*</span></Label><select id="class_id" className={selectClass} {...register("class_id", { onChange: () => { setValue("batch_ids", []); setValue("subject_ids", []); } })}><option value="">Select class</option>{o.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select><Err msg={errors.class_id?.message} /></div>
             <div className="space-y-1.5"><Label htmlFor="academic_year_id">Academic year</Label><select id="academic_year_id" className={selectClass} {...register("academic_year_id")}><option value="">—</option>{o.years.map((y) => <option key={y.id} value={y.id}>{y.name}</option>)}</select></div>
-            <div className="space-y-1.5"><Label htmlFor="admission_date">Admission date <span className="text-destructive">*</span></Label><Input id="admission_date" type="date" max={o.today} {...register("admission_date")} /><Err msg={errors.admission_date?.message} /></div>
+            <div className="space-y-1.5"><Label htmlFor="admission_date">Admission date <span className="text-destructive">*</span></Label><Controller control={control} name="admission_date" render={({ field }) => <DateInput id="admission_date" max={o.today} name={field.name} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value)} onBlur={field.onBlur} aria-invalid={!!errors.admission_date} />} /><Err msg={errors.admission_date?.message} /></div>
             <div className="space-y-1.5"><Label htmlFor="admission_no">Admission number</Label><Input id="admission_no" placeholder="Auto-generated" {...register("admission_no")} /><p className="text-xs text-muted-foreground">Leave blank to generate automatically.</p></div>
             <div className="space-y-1.5 md:col-span-2"><Label htmlFor="school_name">School name</Label><Input id="school_name" {...register("school_name")} /></div>
             <div className="space-y-1.5 md:col-span-2">
@@ -219,7 +220,7 @@ export function AdmissionWizard({ o }: { o: AdmissionOptions }) {
                     <div className="space-y-1.5 md:col-span-2"><Label htmlFor={`f${i}t`}>Frequency</Label><select id={`f${i}t`} className={selectClass} {...register(`fees.${i}.fee_type`, { onChange: (e) => { const t = e.target.value as FeeType; setValue(`fees.${i}.installments`, ({ monthly: 12, quarterly: 4, half_yearly: 2, yearly: 1, course: 1, custom: 3 } as const)[t]); } })}>{Object.entries(FEE_TYPE_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
                     <div className="space-y-1.5"><Label htmlFor={`f${i}a`}>Total amount (₹)</Label><Input id={`f${i}a`} type="number" min={0} step="0.01" {...register(`fees.${i}.base_amount`)} /><Err msg={fe?.base_amount?.message} /></div>
                     <div className="space-y-1.5"><Label htmlFor={`f${i}n`}>Installments</Label><Input id={`f${i}n`} type="number" min={1} max={60} {...register(`fees.${i}.installments`)} /></div>
-                    <div className="space-y-1.5"><Label htmlFor={`f${i}s`}>First period starts</Label><Input id={`f${i}s`} type="date" {...register(`fees.${i}.start_date`)} /></div>
+                    <div className="space-y-1.5"><Label htmlFor={`f${i}s`}>First period starts</Label><Controller control={control} name={`fees.${i}.start_date`} render={({ field }) => <DateInput id={`f${i}s`} name={field.name} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value)} onBlur={field.onBlur} />} /></div>
                     <div className="space-y-1.5"><Label htmlFor={`f${i}u`}>Due day of month</Label><Input id={`f${i}u`} type="number" min={1} max={28} {...register(`fees.${i}.due_day`)} /></div>
                     <div className="space-y-1.5"><Label htmlFor={`f${i}dc`}>Discount</Label><select id={`f${i}dc`} className={selectClass} {...register(`fees.${i}.discount_id`)}><option value="">Manual amount</option>{o.discounts.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.discount_type === "percent" ? `${d.value}%` : formatINR(d.value)})</option>)}</select></div>
                     {!v?.discount_id && <div className="space-y-1.5"><Label htmlFor={`f${i}da`}>Discount (₹)</Label><Input id={`f${i}da`} type="number" min={0} step="0.01" {...register(`fees.${i}.discount_amount`)} /><Err msg={fe?.discount_amount?.message} /></div>}

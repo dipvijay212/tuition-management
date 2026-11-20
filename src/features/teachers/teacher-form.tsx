@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionForm, Field, NativeSelect } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
@@ -32,7 +33,7 @@ export function TeacherForm({ teacher, subjects }: { teacher?: Tables<"teachers"
             <CardContent className="grid gap-4 md:grid-cols-2">
               <Field label="Qualification" name="qualification"><Input id="qualification" name="qualification" defaultValue={teacher?.qualification ?? ""} placeholder="M.Sc, B.Ed" /></Field>
               <Field label="Specialization" name="specialization"><Input id="specialization" name="specialization" defaultValue={teacher?.specialization ?? ""} placeholder="Mathematics" /></Field>
-              <Field label="Joining date" name="joining_date" error={errors.joining_date}><Input id="joining_date" name="joining_date" type="date" defaultValue={teacher?.joining_date ?? ""} /></Field>
+              <Field label="Joining date" name="joining_date" error={errors.joining_date}><DateInput id="joining_date" name="joining_date" defaultValue={teacher?.joining_date ?? ""} /></Field>
               <Field label="Employment status" name="employment_status">
                 <NativeSelect id="employment_status" name="employment_status" defaultValue={teacher?.employment_status ?? "active"}>
                   <option value="active">Active</option><option value="on_leave">On leave</option><option value="resigned">Resigned</option><option value="terminated">Terminated</option>

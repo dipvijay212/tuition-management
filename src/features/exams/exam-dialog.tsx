@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { ActionForm, Field, NativeSelect } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
 import { saveExamination } from "./actions";
@@ -64,10 +65,9 @@ export function NewExamDialog({ classes, batches, defaultDate, trigger }: Props)
 
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Start date" name="start_date" required error={errors.start_date}>
-                  <Input
+                  <DateInput
                     id="start_date"
                     name="start_date"
-                    type="date"
                     value={startDate}
                     onChange={(e) => {
                       setStartDate(e.target.value);
@@ -77,10 +77,9 @@ export function NewExamDialog({ classes, batches, defaultDate, trigger }: Props)
                   />
                 </Field>
                 <Field label="End date" name="end_date" required error={errors.end_date}>
-                  <Input
+                  <DateInput
                     id="end_date"
                     name="end_date"
-                    type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                     required
@@ -89,7 +88,7 @@ export function NewExamDialog({ classes, batches, defaultDate, trigger }: Props)
               </div>
 
               <Field label="Result publish date (optional)" name="result_publish_date" error={errors.result_publish_date}>
-                <Input id="result_publish_date" name="result_publish_date" type="date" />
+                <DateInput id="result_publish_date" name="result_publish_date" />
               </Field>
 
               <SubmitButton className="w-full">Create Examination</SubmitButton>

@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { ActionForm, Field, NativeSelect } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
 import { saveTimetableSlot } from "./actions";
@@ -79,7 +80,7 @@ export function TimetableSlotDialog({ batches, teachers, subjects }: Props) {
                   <Input id="room" name="room" placeholder="e.g. Room 101" />
                 </Field>
                 <Field label="Effective from" name="effective_from" error={errors.effective_from}>
-                  <Input id="effective_from" name="effective_from" type="date" />
+                  <DateInput id="effective_from" name="effective_from" />
                 </Field>
               </div>
 

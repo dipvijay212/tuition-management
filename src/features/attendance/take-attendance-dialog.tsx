@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Field, NativeSelect } from "@/components/shared/form";
 import { formatDate } from "@/lib/utilities/format";
 import { cn } from "@/lib/utils";
@@ -229,11 +230,10 @@ export function TakeAttendanceDialog({
               <>
                 <span className="font-medium text-foreground">Date:</span>
                 {!initialSessionId ? (
-                  <Input
-                    type="date"
+                  <DateInput
                     value={sessionDate}
                     onChange={(e) => handleDateChange(e.target.value)}
-                    className="h-7 w-36 text-xs font-semibold py-0 px-2"
+                    className="h-7 w-40"
                     disabled={loading || saving}
                   />
                 ) : (
@@ -272,10 +272,9 @@ export function TakeAttendanceDialog({
             </Field>
 
             <Field label="Attendance Date" name="session_date" required>
-              <Input
+              <DateInput
                 id="session_date"
                 name="session_date"
-                type="date"
                 value={sessionDate}
                 onChange={(e) => setSessionDate(e.target.value)}
                 required

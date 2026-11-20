@@ -3,6 +3,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DateInput } from "@/components/ui/date-input";
 
 const PRESETS = [{ v: "3", l: "3M" }, { v: "6", l: "6M" }, { v: "12", l: "12M" }];
 
@@ -23,9 +24,9 @@ export function RangePicker({ from, to }: { from: string; to: string }) {
       <div className="inline-flex rounded-lg border bg-card p-0.5" role="group" aria-label="Date range">
         {PRESETS.map((p) => <button key={p.v} onClick={() => go({ range: p.v })} className={cn("rounded-md px-3 py-1.5 text-sm", preset === p.v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{p.l}</button>)}
       </div>
-      <input type="date" aria-label="From date" value={from} max={to} onChange={(e) => e.target.value && go({ from: e.target.value, to })} className="h-9 rounded-lg border bg-card px-2 text-sm" />
+      <DateInput aria-label="From date" value={from} max={to} required onChange={(e) => e.target.value && go({ from: e.target.value, to })} className="h-9 w-40" />
       <span className="text-muted-foreground">–</span>
-      <input type="date" aria-label="To date" value={to} min={from} onChange={(e) => e.target.value && go({ from, to: e.target.value })} className="h-9 rounded-lg border bg-card px-2 text-sm" />
+      <DateInput aria-label="To date" value={to} min={from} required onChange={(e) => e.target.value && go({ from, to: e.target.value })} className="h-9 w-40" />
     </div>
   );
 }

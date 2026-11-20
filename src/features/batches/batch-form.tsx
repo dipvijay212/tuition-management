@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { ActionForm, Field, NativeSelect } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
 import { DAYS } from "@/lib/utilities/format";
@@ -53,8 +54,8 @@ export function BatchForm({ batch, classes, years, teachers, subjects, defaultYe
                 <Field label="Room" name="room"><Input id="room" name="room" defaultValue={batch?.room ?? ""} placeholder="R1" /></Field>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Start date" name="start_date" error={errors.start_date}><Input id="start_date" name="start_date" type="date" defaultValue={batch?.start_date ?? ""} /></Field>
-                <Field label="End date" name="end_date" error={errors.end_date}><Input id="end_date" name="end_date" type="date" defaultValue={batch?.end_date ?? ""} /></Field>
+                <Field label="Start date" name="start_date" error={errors.start_date}><DateInput id="start_date" name="start_date" defaultValue={batch?.start_date ?? ""} /></Field>
+                <Field label="End date" name="end_date" error={errors.end_date}><DateInput id="end_date" name="end_date" defaultValue={batch?.end_date ?? ""} /></Field>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Start time" name="start_time" error={errors.start_time}><Input id="start_time" name="start_time" type="time" defaultValue={batch?.start_time?.slice(0, 5) ?? ""} /></Field>

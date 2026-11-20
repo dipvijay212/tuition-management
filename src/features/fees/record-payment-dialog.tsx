@@ -4,6 +4,7 @@ import { Plus, IndianRupee } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { ActionForm, Field, NativeSelect } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
 import { recordPaymentAction } from "./actions";
@@ -121,7 +122,7 @@ export function RecordPaymentDialog({
                   />
                 </Field>
                 <Field label="Payment Date" name="payment_date" required error={errors.payment_date}>
-                  <Input id="payment_date" name="payment_date" type="date" defaultValue={defaultDate} required />
+                  <DateInput id="payment_date" name="payment_date" defaultValue={defaultDate} required />
                 </Field>
               </div>
 

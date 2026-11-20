@@ -3,7 +3,7 @@ import { useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { ActionForm, Field } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
 import { generateSessionsAction } from "./actions";
@@ -25,10 +25,10 @@ export function GenerateSessionsDialog({ defaultFrom, defaultTo }: { defaultFrom
             <>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="From date" name="from_date" required error={errors.from_date}>
-                  <Input id="from_date" name="from_date" type="date" defaultValue={defaultFrom} required />
+                  <DateInput id="from_date" name="from_date" defaultValue={defaultFrom} required />
                 </Field>
                 <Field label="To date" name="to_date" required error={errors.to_date}>
-                  <Input id="to_date" name="to_date" type="date" defaultValue={defaultTo} required />
+                  <DateInput id="to_date" name="to_date" defaultValue={defaultTo} required />
                 </Field>
               </div>
               <SubmitButton className="w-full">Generate sessions</SubmitButton>
