@@ -5,7 +5,24 @@ import { api, ApiError, clearSessionCookie, clientMeta, setSessionCookie } from 
 import { passwordSchema } from "@/lib/validations/common";
 import { ROLE_HOME, type AppRole } from "@/lib/auth/session";
 
-export type AuthState = { error?: string; message?: string } | undefined;
+export type InstituteOption = {
+  id: string;
+  name: string;
+  code: string;
+  logo_path: string | null;
+};
+
+export type AuthState =
+  | {
+      error?: string;
+      message?: string;
+      requiresInstituteSelection?: boolean;
+      institutes?: InstituteOption[];
+      savedIdentifier?: string;
+      savedPassword?: string;
+      savedRemember?: boolean;
+    }
+  | undefined;
 
 const STATUS_MESSAGES: Record<string, string> = {
   inactive: "Your account is inactive. Please contact the institute.",
@@ -37,22 +54,45 @@ export async function loginAction(_: AuthState, form: FormData): Promise<AuthSta
   const password = String(form.get("password") ?? "");
   const remember = form.get("remember") === "on";
   const next = String(form.get("next") ?? "");
-  if (!institute_code) return { error: "Enter your institute code." };
   if (!identifier || !password) return { error: "Enter your mobile number or email and password." };
 
-  let res: IssuedSession & { roles: AppRole[]; home: string; institute: { code: string } };
+  let res:
+    | (IssuedSession & { roles: AppRole[]; home: string; institute: { code: string } })
+    | { requires_institute_selection: true; institutes: InstituteOption[] };
   try {
-    res = await api("/auth/login", { method: "POST", token: null, body: { institute_code, identifier, password, remember, ...(await clientMeta()) } });
+    res = await api("/auth/login", {
+      method: "POST",
+      token: null,
+      body: {
+        institute_code: institute_code || undefined,
+        identifier,
+        password,
+        remember,
+        ...(await clientMeta()),
+      },
+    });
   } catch (e) {
     return { error: errorOf(e) };
   }
-  await setSessionCookie(res);
-  await rememberInstituteCode(res.institute.code);
+
+  if ("requires_institute_selection" in res) {
+    return {
+      requiresInstituteSelection: true,
+      institutes: res.institutes,
+      savedIdentifier: identifier,
+      savedPassword: password,
+      savedRemember: remember,
+    };
+  }
+
+  const session = res;
+  await setSessionCookie(session);
+  await rememberInstituteCode(session.institute.code);
 
   const safeNext =
-    next.startsWith("/") && !next.startsWith("//") && Object.entries(ROLE_HOME).some(([r, p]) => res.roles.includes(r as AppRole) && next.startsWith(p))
+    next.startsWith("/") && !next.startsWith("//") && Object.entries(ROLE_HOME).some(([r, p]) => session.roles.includes(r as AppRole) && next.startsWith(p))
       ? next
-      : res.home;
+      : session.home;
   redirect(safeNext);
 }
 
