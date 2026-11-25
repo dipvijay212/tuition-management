@@ -1,12 +1,12 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Eye, EyeOff, Building2, ChevronRight, ArrowLeft } from "lucide-react";
-import { loginAction, type AuthState } from "@/features/auth/actions";
+import type { InstituteOption } from "@/features/auth/actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { SubmitButton } from "@/components/shared/submit-button";
+import { Button } from "@/components/ui/button";
 import { FormAlert } from "@/components/shared/form-alert";
 
 export function LoginForm({
@@ -18,19 +18,101 @@ export function LoginForm({
   initialError?: string;
   defaultCode?: string;
 }) {
-  const [state, action] = useActionState<AuthState, FormData>(
-    loginAction,
-    initialError ? { error: initialError } : undefined
-  );
+  const [error, setError] = useState<string | undefined>(initialError);
+  const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [instituteCode, setInstituteCode] = useState(defaultCode ?? "");
+  const [multiInstitutes, setMultiInstitutes] = useState<InstituteOption[] | null>(null);
+  const [savedCredentials, setSavedCredentials] = useState<{
+    identifier: string;
+    password: string;
+    remember: boolean;
+  } | null>(null);
+
+  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(undefined);
+    setPending(true);
+
+    const form = new FormData(e.currentTarget);
+    const identifier = String(form.get("identifier") ?? "").trim();
+    const password = String(form.get("password") ?? "");
+    const code = String(form.get("institute_code") ?? "").trim();
+    const remember = form.get("remember") === "on";
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier,
+          password,
+          institute_code: code || undefined,
+          remember,
+          next,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setError(data.error || "Failed to sign in. Please check your credentials.");
+        setPending(false);
+        return;
+      }
+
+      if (data.requiresInstituteSelection) {
+        setMultiInstitutes(data.institutes);
+        setSavedCredentials({ identifier, password, remember });
+        setPending(false);
+        return;
+      }
+
+      // Success: redirect to user's portal
+      window.location.href = data.redirect || "/";
+    } catch (err: any) {
+      setError(err?.message || "Something went wrong. Please check your network connection.");
+      setPending(false);
+    }
+  }
+
+  async function selectInstitute(code: string) {
+    if (!savedCredentials) return;
+    setError(undefined);
+    setPending(true);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: savedCredentials.identifier,
+          password: savedCredentials.password,
+          institute_code: code,
+          remember: savedCredentials.remember,
+          next,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setError(data.error || "Failed to sign in to selected institute.");
+        setPending(false);
+        return;
+      }
+
+      window.location.href = data.redirect || "/";
+    } catch (err: any) {
+      setError(err?.message || "Something went wrong.");
+      setPending(false);
+    }
+  }
 
   // If the user belongs to multiple institutes, show the institute selection screen (Slack/Notion style)
-  if (state?.requiresInstituteSelection && state.institutes && state.institutes.length > 0) {
+  if (multiInstitutes && multiInstitutes.length > 0) {
     return (
       <div className="space-y-5">
-        <FormAlert error={state.error} />
+        <FormAlert error={error} />
         <div className="space-y-1">
           <h3 className="text-lg font-semibold tracking-tight">Select your institute</h3>
           <p className="text-sm text-muted-foreground">
@@ -38,53 +120,49 @@ export function LoginForm({
           </p>
         </div>
 
-        <form action={action} className="space-y-2">
-          <input type="hidden" name="next" value={next ?? ""} />
-          <input type="hidden" name="identifier" value={state.savedIdentifier ?? ""} />
-          <input type="hidden" name="password" value={state.savedPassword ?? ""} />
-          {state.savedRemember && <input type="hidden" name="remember" value="on" />}
-
-          <div className="space-y-2 pt-1">
-            {state.institutes.map((inst) => (
-              <button
-                key={inst.id}
-                type="submit"
-                name="institute_code"
-                value={inst.code}
-                className="group flex w-full items-center justify-between rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary hover:bg-accent/40 focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="grid size-10 place-items-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                    <Building2 className="size-5" />
-                  </span>
-                  <div>
-                    <div className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                      {inst.name}
-                    </div>
-                    <div className="font-mono text-xs text-muted-foreground">Code: {inst.code}</div>
+        <div className="space-y-2 pt-1">
+          {multiInstitutes.map((inst) => (
+            <button
+              key={inst.id}
+              type="button"
+              disabled={pending}
+              onClick={() => selectInstitute(inst.code)}
+              className="group flex w-full items-center justify-between rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary hover:bg-accent/40 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+            >
+              <div className="flex items-center gap-3">
+                <span className="grid size-10 place-items-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                  <Building2 className="size-5" />
+                </span>
+                <div>
+                  <div className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                    {inst.name}
                   </div>
+                  <div className="font-mono text-xs text-muted-foreground">Code: {inst.code}</div>
                 </div>
-                <ChevronRight className="size-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition" />
-              </button>
-            ))}
-          </div>
+              </div>
+              <ChevronRight className="size-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition" />
+            </button>
+          ))}
+        </div>
 
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="mt-4 flex w-full items-center justify-center gap-2 text-xs text-muted-foreground hover:text-foreground pt-2"
-          >
-            <ArrowLeft className="size-3.5" /> Sign in with a different account
-          </button>
-        </form>
+        <button
+          type="button"
+          onClick={() => {
+            setMultiInstitutes(null);
+            setSavedCredentials(null);
+          }}
+          className="mt-4 flex w-full items-center justify-center gap-2 text-xs text-muted-foreground hover:text-foreground pt-2"
+        >
+          <ArrowLeft className="size-3.5" /> Sign in with a different account
+        </button>
       </div>
     );
   }
 
   return (
-    <form action={action} className="space-y-4">
+    <form onSubmit={handleLogin} className="space-y-4">
       <input type="hidden" name="next" value={next ?? ""} />
-      <FormAlert error={state?.error} />
+      <FormAlert error={error} />
 
       {/* When arrived via an institute-specific URL (?code=XYZ) */}
       {defaultCode && !showCodeInput && (
@@ -198,9 +276,9 @@ export function LoginForm({
         <Checkbox name="remember" defaultChecked /> Remember me on this device
       </label>
 
-      <SubmitButton className="h-11 w-full" pendingText="Signing in…">
-        Sign in
-      </SubmitButton>
+      <Button type="submit" disabled={pending} className="h-11 w-full">
+        {pending ? "Signing in…" : "Sign in"}
+      </Button>
     </form>
   );
 }

@@ -9,7 +9,19 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: { default: "Tuition Manager", template: "%s · Tuition Manager" },
   description: "Tuition classes management: students, attendance, fees, exams and more.",
+  manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Tuition Manager", statusBarStyle: "default" },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/icon-192.png", sizes: "192x192" },
+      { url: "/icon-512.png", sizes: "512x512" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {

@@ -31,7 +31,13 @@ export default async function TeacherProfile() {
           </dl>
         </CardContent></Card>
       )}
-      <AccountCard name={ctx.profile.full_name} email={ctx.profile.email} phone={ctx.profile.phone} />
+      <AccountCard
+        name={ctx.profile.full_name}
+        email={ctx.profile.email}
+        phone={ctx.profile.phone}
+        role="teacher"
+        instituteName={ctx.institute?.name}
+      />
     </>
   );
 }

@@ -106,6 +106,23 @@ export async function logoutAction() {
   redirect("/login");
 }
 
+/**
+ * Refreshes and extends the current session token & cookie.
+ * Used by PWA keep-alive and active client sessions so installed standalone apps maintain valid sessions.
+ */
+export async function refreshSessionAction(): Promise<{ ok: boolean; expiresAt?: string; error?: string }> {
+  try {
+    const res = await api<IssuedSession & { roles: AppRole[]; home: string }>("/auth/refresh", {
+      method: "POST",
+      body: {},
+    });
+    await setSessionCookie(res);
+    return { ok: true, expiresAt: res.expiresAt };
+  } catch (e) {
+    return { ok: false, error: errorOf(e) };
+  }
+}
+
 export async function forgotPasswordAction(_: AuthState, form: FormData): Promise<AuthState> {
   const identifier = String(form.get("identifier") ?? "").trim();
   const institute_code = normalizeCode(form.get("institute_code"));

@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ActionForm, Field, NativeSelect } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { InstallAppCard } from "@/components/shared/pwa-install";
 import { formatDate, DAYS } from "@/lib/utilities/format";
 import { saveAcademicYear, saveEmailSettings, saveGradingRules, saveInstituteProfile, savePolicies } from "./actions";
 import { TestEmailDialog } from "./test-email-dialog";
@@ -47,6 +48,7 @@ export function SettingsTabs({ institute, settings: s, years, grades, smtpConfig
         <TabsTrigger value="policies">Fees & policies</TabsTrigger>
         <TabsTrigger value="email">Email &amp; SMTP</TabsTrigger>
         <TabsTrigger value="grading">Grading</TabsTrigger>
+        <TabsTrigger value="app">App &amp; PWA</TabsTrigger>
       </TabsList>
 
       <TabsContent value="profile">
@@ -262,6 +264,9 @@ export function SettingsTabs({ institute, settings: s, years, grades, smtpConfig
       </TabsContent>
 
       <TabsContent value="grading"><GradingEditor initial={grades} /></TabsContent>
+      <TabsContent value="app">
+        <InstallAppCard role="admin" instituteName={institute.name} />
+      </TabsContent>
     </Tabs>
   );
 }

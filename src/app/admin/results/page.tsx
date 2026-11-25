@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { api } from "@/lib/api/server";
 import type { Tables } from "@/types/database";
@@ -54,7 +55,13 @@ export default async function AdminResultsPage(props: PageProps<"/admin/results"
             header: "Student",
             cell: (r) => (
               <div>
-                <span className="font-medium">{r.students?.full_name}</span>
+                {r.students?.id ? (
+                  <Link href={`/admin/students/${r.students.id}`} className="font-medium text-primary hover:underline">
+                    {r.students.full_name}
+                  </Link>
+                ) : (
+                  <span className="font-medium">{r.students?.full_name}</span>
+                )}
                 <div className="text-xs text-muted-foreground">Adm: {r.students?.admission_no}</div>
               </div>
             ),

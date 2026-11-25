@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { api } from "@/lib/api/server";
 import { PageHeader } from "@/components/shared/page-header";
@@ -21,7 +22,15 @@ export default async function TeacherStudents(props: PageProps<"/teacher/student
       <FilterBar><SearchInput placeholder="Search name or admission no." /></FilterBar>
       <DataTable rows={data ?? []} rowKey={(r) => r.id} total={count ?? 0} page={page} pageSize={pageSize} empty={{ title: "No students found" }}
         columns={[
-          { key: "n", header: "Student", cell: (r) => <span className="font-medium">{r.full_name}</span> },
+          {
+            key: "n",
+            header: "Student",
+            cell: (r) => (
+              <Link href={`/teacher/students/${r.id}`} className="font-medium text-primary hover:underline">
+                {r.full_name}
+              </Link>
+            ),
+          },
           { key: "a", header: "Admission no.", cell: (r) => r.admission_no },
           { key: "c", header: "Class", hideOnMobile: true, cell: (r) => r.classes?.name ?? "—" },
           { key: "b", header: "Batches", cell: (r) => r.student_batches.filter((x) => x.status === "active").map((x) => x.batches?.name).join(", ") },

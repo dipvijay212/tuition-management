@@ -7,6 +7,7 @@ import { Building2, Check, LogOut, Moon, Sun, UserCircle, Repeat } from "lucide-
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuGroup } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { logoutAction, switchInstituteAction, type MyInstitute } from "@/features/auth/actions";
+import { InstallAppMenuItem } from "@/components/shared/pwa-install";
 import type { AppRole } from "@/lib/auth/session";
 import { ROLE_LABEL } from "@/lib/permissions/navigation";
 
@@ -41,6 +42,7 @@ export function UserMenu({ role, roles, user, institutes = [] }: { role: AppRole
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem render={<Link href={profileHref} />}><UserCircle /> {role === "admin" ? "Institute settings" : "My profile"}</DropdownMenuItem>
+        <InstallAppMenuItem role={role} />
         {roles.filter((r) => r !== role).map((r) => (
           <DropdownMenuItem key={r} render={<Link href={`/${r}`} />}><Repeat /> Switch to {ROLE_LABEL[r]}</DropdownMenuItem>
         ))}
