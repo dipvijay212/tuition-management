@@ -102,6 +102,7 @@ export interface StudentPerformanceData {
     admission_no: string;
     status: string;
     class_name: string | null;
+    institute_name: string;
     batches: Array<{ id: string; name: string }>;
     photo_url: string | null;
   };

@@ -134,6 +134,7 @@ export function ExamHistoryTable({ student, timeline, summary }: ExamHistoryTabl
                     {/* Report Card Button */}
                     <div onClick={(e) => e.stopPropagation()}>
                       <PrintableReportCard
+                        instituteName={student.institute_name}
                         student={student}
                         exam={exam}
                         summary={summary}

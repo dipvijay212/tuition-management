@@ -37,7 +37,7 @@ export function ReceiptDialog({ receipt }: { receipt: ReceiptData }) {
         <DialogHeader>
           <div className="flex items-center justify-between gap-3 pr-8">
             <DialogTitle>Fee Receipt</DialogTitle>
-            <Button variant="outline" size="sm" onClick={handlePrint}>
+            <Button variant="outline" size="sm" onClick={handlePrint} className="print:hidden">
               <Printer className="size-3.5 mr-1" /> Print
             </Button>
           </div>

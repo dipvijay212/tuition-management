@@ -194,7 +194,7 @@ export function AdmissionWizard({ o }: { o: AdmissionOptions }) {
             <div><CardTitle>Fees</CardTitle><CardDescription>Fee installments are generated automatically. Discounts need a reason and are recorded with your name.</CardDescription></div>
             <div className="flex flex-wrap gap-2">
               {o.structures.filter((s) => !s.class_id || s.class_id === classId).length > 0 && (
-                <select className={cn(selectClass, "w-auto")} value="" onChange={(e) => addStructure(e.target.value)} aria-label="Add fee structure">
+                <select className={cn(selectClass, "w-full min-w-0 sm:w-auto sm:max-w-xs")} value="" onChange={(e) => addStructure(e.target.value)} aria-label="Add fee structure">
                   <option value="">+ Add fee structure</option>
                   {o.structures.filter((s) => !s.class_id || s.class_id === classId).map((s) => <option key={s.id} value={s.id}>{s.name} · {formatINR(s.total_amount)}</option>)}
                 </select>
@@ -213,8 +213,8 @@ export function AdmissionWizard({ o }: { o: AdmissionOptions }) {
               const preview = previewInstallments({ base, discount: totalDisc, installments: Number(v?.installments || 1), feeType: (v?.fee_type ?? "custom") as FeeType, startDate: v?.start_date ?? "", dueDay: Number(v?.due_day || 1) });
               const fe = errors.fees?.[i];
               return (
-                <div key={f.id} className="space-y-4 rounded-lg border p-4">
-                  <div className="grid gap-3 md:grid-cols-4">
+                <div key={f.id} className="min-w-0 space-y-4 rounded-lg border p-4">
+                  <div className="grid gap-3 md:grid-cols-4 *:min-w-0">
                     <input type="hidden" {...register(`fees.${i}.category`)} />
                     <div className="space-y-1.5 md:col-span-2"><Label htmlFor={`f${i}d`}>Description</Label><Input id={`f${i}d`} {...register(`fees.${i}.description`)} /><Err msg={fe?.description?.message} /></div>
                     <div className="space-y-1.5 md:col-span-2"><Label htmlFor={`f${i}t`}>Frequency</Label><select id={`f${i}t`} className={selectClass} {...register(`fees.${i}.fee_type`, { onChange: (e) => { const t = e.target.value as FeeType; setValue(`fees.${i}.installments`, ({ monthly: 12, quarterly: 4, half_yearly: 2, yearly: 1, course: 1, custom: 3 } as const)[t]); } })}>{Object.entries(FEE_TYPE_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
