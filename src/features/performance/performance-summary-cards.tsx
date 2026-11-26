@@ -40,16 +40,10 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
     total_exams,
     current_percentage,
     average_percentage,
-    highest_percentage,
     latest_delta,
-    net_improvement,
-    trend,
     current_rank,
     current_rank_out_of,
     rank_delta,
-    trend_delta,
-    trend_window,
-    pass_rate,
     attendance_percentage,
   } = summary;
 
@@ -57,20 +51,19 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
     return (
       <Card className="border-dashed bg-muted/20">
         <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          No published examinations recorded for this student yet. As soon as exams are published, performance analytics, deltas, and trajectory trends will appear here.
+          No exam results yet. Progress will appear here after the first exam is published.
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {/* 1. Latest Exam Score */}
       <Card className="overflow-hidden">
         <CardContent className="p-4">
           <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span className="font-medium uppercase tracking-wider">Latest Score</span>
-            <DeltaBadge delta={latest_delta} />
+            <span className="font-medium uppercase tracking-wider">Latest score</span>
           </div>
           <div className="mt-2 text-2xl font-bold tracking-tight text-foreground">
             {current_percentage}%
@@ -78,44 +71,14 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
           <p className="mt-1 text-xs text-muted-foreground">
             {latest_delta !== null ? (
               latest_delta > 0 ? (
-                <span className="text-emerald-600 dark:text-emerald-400 font-medium">Increased by {latest_delta}%</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-medium">{latest_delta}% higher than last exam</span>
               ) : latest_delta < 0 ? (
-                <span className="text-destructive font-medium">Decreased by {Math.abs(latest_delta)}%</span>
+                <span className="text-destructive font-medium">{Math.abs(latest_delta)}% lower than last exam</span>
               ) : (
-                "Unchanged from previous test"
+                "Same as last exam"
               )
             ) : (
-              "First test score"
-            )}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* 2. Trajectory & Growth */}
-      <Card className="overflow-hidden">
-        <CardContent className="p-4">
-          <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span className="font-medium uppercase tracking-wider">Growth Trend</span>
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${
-                trend === "improving"
-                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  : trend === "declining"
-                  ? "bg-destructive/10 text-destructive"
-                  : "bg-muted text-muted-foreground"
-              }`}
-            >
-              {trend === "improving" ? <TrendingUp className="size-3" /> : trend === "declining" ? <TrendingDown className="size-3" /> : <Minus className="size-3" />}
-              {trend}
-            </span>
-          </div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {net_improvement >= 0 ? `+${net_improvement}%` : `${net_improvement}%`}
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Net growth since 1st test
-            {trend_delta !== null && trend_window > 1 && (
-              <> · last {trend_window} avg {trend_delta >= 0 ? "+" : ""}{trend_delta} pts</>
+              "First exam"
             )}
           </p>
         </CardContent>
@@ -125,7 +88,7 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
       <Card className="overflow-hidden">
         <CardContent className="p-4">
           <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span className="font-medium uppercase tracking-wider">Class Rank</span>
+            <span className="font-medium uppercase tracking-wider">Rank</span>
             {rank_delta !== null && (
               <span
                 className={`inline-flex items-center gap-0.5 text-xs font-semibold ${
@@ -141,12 +104,12 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
               {current_rank ? `#${current_rank}` : "—"}
             </span>
             {current_rank && current_rank_out_of ? (
-              <span className="text-xs text-muted-foreground">of {current_rank_out_of}</span>
+              <span className="text-xs text-muted-foreground">of {current_rank_out_of} {current_rank_out_of === 1 ? "student" : "students"}</span>
             ) : null}
             <Award className="size-4 text-amber-500" />
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Best score: {highest_percentage}%
+            In the latest exam
           </p>
         </CardContent>
       </Card>
@@ -155,22 +118,19 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
       <Card className="overflow-hidden">
         <CardContent className="p-4">
           <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span className="font-medium uppercase tracking-wider">Cumulative Avg</span>
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="size-3" /> {pass_rate}% Pass
-            </span>
+            <span className="font-medium uppercase tracking-wider">Average score</span>
           </div>
           <div className="mt-2 text-2xl font-bold tracking-tight text-foreground">
             {average_percentage}%
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Across {total_exams} published {total_exams === 1 ? "exam" : "exams"}
+            Across {total_exams} {total_exams === 1 ? "exam" : "exams"}
           </p>
         </CardContent>
       </Card>
 
       {/* 5. Attendance Factor */}
-      <Card className="col-span-2 overflow-hidden lg:col-span-1">
+      <Card className="overflow-hidden">
         <CardContent className="p-4">
           <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span className="font-medium uppercase tracking-wider">Attendance</span>
@@ -197,7 +157,7 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
             {attendance_percentage !== null ? `${attendance_percentage}%` : "—"}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Correlates with test scores
+            Of classes attended
           </p>
         </CardContent>
       </Card>

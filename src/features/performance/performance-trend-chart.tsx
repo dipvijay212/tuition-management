@@ -1,12 +1,11 @@
 "use client";
 
 import {
-  Area,
   CartesianGrid,
+  LabelList,
   Legend,
   Line,
   LineChart,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -52,12 +51,12 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Toolti
         Date: {formatDate(data.start_date)}
       </div>
       <div className="flex items-center justify-between gap-4 pt-1">
-        <span className="font-medium text-primary">Student Score:</span>
+        <span className="font-medium text-primary">Score:</span>
         <span className="font-bold text-sm text-primary">{data.percentage}%</span>
       </div>
       {data.percentage_delta !== null && (
         <div className="flex items-center justify-between gap-4">
-          <span className="text-muted-foreground">Delta vs Prev:</span>
+          <span className="text-muted-foreground">Change from last exam:</span>
           <span
             className={`font-semibold ${
               data.percentage_delta > 0
@@ -79,7 +78,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Toolti
       )}
       {data.attendance_pct !== null && (
         <div className="flex items-center justify-between gap-4">
-          <span className="text-muted-foreground">Attendance before exam:</span>
+          <span className="text-muted-foreground">Attendance before this exam:</span>
           <span className="font-medium">
             {data.attendance_pct}% <span className="text-muted-foreground">({data.attendance_sessions} classes)</span>
           </span>
@@ -87,7 +86,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Toolti
       )}
       {data.rank && (
         <div className="flex items-center justify-between gap-4">
-          <span className="text-muted-foreground">Class Rank:</span>
+          <span className="text-muted-foreground">Rank:</span>
           <span className="font-medium">
             #{data.rank}
             {data.total_students_in_exam > 0 && <span className="text-muted-foreground"> of {data.total_students_in_exam}</span>}
@@ -113,7 +112,7 @@ export function PerformanceTrendChart({ timeline }: { timeline: ExamTimelineItem
           <CardDescription>Track exam-over-exam score improvement over time</CardDescription>
         </CardHeader>
         <CardContent className="h-64 grid place-items-center text-sm text-muted-foreground">
-          No published exam data available to plot performance trajectory yet.
+          No exam results yet.
         </CardContent>
       </Card>
     );
@@ -138,83 +137,39 @@ export function PerformanceTrendChart({ timeline }: { timeline: ExamTimelineItem
 
   // A batch average is only a benchmark when others sat the exam too.
   const hasPeers = timeline.some((t) => t.total_students_in_exam > 1);
-  const hasAttendance = timeline.some((t) => t.attendance_pct !== null);
-  const allAverages = hasPeers
-    ? timeline.map((t) => t.batch_average).filter((v): v is number => v !== null)
-    : [];
-  const overallBatchAvg = allAverages.length > 0
-    ? Math.round((allAverages.reduce((a, b) => a + b, 0) / allAverages.length) * 10) / 10
-    : null;
 
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between pb-4">
-        <div>
-          <CardTitle className="text-base font-semibold">Overall Performance Trajectory</CardTitle>
-          <CardDescription>
-            {hasPeers ? "Score across exams vs the batch average" : "Score across exams"}
-            {hasAttendance ? ", with attendance in the run-up to each exam" : ""}
-          </CardDescription>
-        </div>
-        {overallBatchAvg !== null && (
-          <div className="text-xs text-muted-foreground">
-            Class Benchmark Avg: <span className="font-semibold text-foreground">{overallBatchAvg}%</span>
-          </div>
-        )}
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base font-semibold">Score in each exam</CardTitle>
+        <CardDescription>
+          {hasPeers ? "Solid line: the student's score. Dashed line: the batch average." : "The student's score in every exam, oldest to newest."}
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-72 w-full">
+        <div className="h-64 w-full sm:h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <LineChart data={chartData} margin={{ top: 24, right: 16, left: -20, bottom: 0 }}>
               {grid}
-              <XAxis dataKey="name" {...axis} />
-              <YAxis {...axis} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+              <XAxis dataKey="name" {...axis} interval="preserveStartEnd" />
+              <YAxis {...axis} domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tickFormatter={(v) => `${v}%`} />
               <Tooltip content={<CustomTooltip />} />
-              <Legend
-                verticalAlign="top"
-                align="right"
-                iconType="circle"
-                wrapperStyle={{ paddingBottom: 12, fontSize: 12 }}
-              />
-              {overallBatchAvg !== null && (
-                <ReferenceLine
-                  y={overallBatchAvg}
-                  stroke="var(--muted-foreground)"
-                  strokeDasharray="4 4"
-                  label={{ value: "Class Avg", fill: "var(--muted-foreground)", fontSize: 10, position: "insideBottomRight" }}
-                />
+              {hasPeers && (
+                <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: 12, fontSize: 12 }} />
               )}
               <Line
                 type="monotone"
                 dataKey="percentage"
-                name="Student Score (%)"
+                name="Score"
                 stroke="var(--series-1, #3b82f6)"
                 strokeWidth={3}
                 dot={{ r: 4, strokeWidth: 2, fill: "var(--background)" }}
                 activeDot={{ r: 6, strokeWidth: 2 }}
-              />
+              >
+                <LabelList dataKey="percentage" position="top" offset={10} formatter={(v: unknown) => `${Math.round(Number(v))}%`} style={{ fontSize: 11, fill: "var(--foreground)", fontWeight: 600 }} />
+              </Line>
               {hasPeers && (
-                <Line
-                  type="monotone"
-                  dataKey="batch_average"
-                  name="Batch Average (%)"
-                  stroke="var(--series-2, #94a3b8)"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  dot={{ r: 3 }}
-                />
-              )}
-              {hasAttendance && (
-                <Line
-                  type="monotone"
-                  dataKey="attendance_pct"
-                  name="Attendance before exam (%)"
-                  stroke="var(--series-3, #f59e0b)"
-                  strokeWidth={2}
-                  strokeDasharray="2 4"
-                  dot={{ r: 4, strokeWidth: 2, fill: "var(--background)" }}
-                  connectNulls
-                />
+                <Line type="monotone" dataKey="batch_average" name="Batch average" stroke="var(--series-2, #94a3b8)" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} />
               )}
             </LineChart>
           </ResponsiveContainer>

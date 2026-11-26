@@ -231,7 +231,7 @@ export function PrintableReportCard({
                 )
               ) : (
                 <span>
-                  Baseline evaluation completed. Future assessments will track progression and score deltas against this benchmark.
+                  This is the first exam. Future report cards will show the change from this score.
                 </span>
               )}
             </p>

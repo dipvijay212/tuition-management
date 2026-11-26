@@ -19,7 +19,7 @@ export default async function TeacherStudentPerformancePage(props: PageProps<"/t
     <div className="space-y-6">
       <PageHeader
         title={`${data.student.full_name} — Performance Report`}
-        description={`Admission No: ${data.student.admission_no} · Class: ${data.student.class_name ?? "—"} · Track performance trajectory, test deltas, and subject mastery.`}
+        description={`Admission No: ${data.student.admission_no} · Class: ${data.student.class_name ?? "—"}`}
         back={{ href: "/teacher/students", label: "My Students" }}
       />
       <StudentPerformanceView data={data} />

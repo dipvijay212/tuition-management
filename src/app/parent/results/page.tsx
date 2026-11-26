@@ -21,7 +21,7 @@ export default async function ParentResultsPage(props: PageProps<"/parent/result
       <div className="space-y-6">
         <PageHeader
           title="Children Performance & Reports"
-          description="Track your children's academic progression, test score deltas, and report cards."
+          description="Your child's exam results, how they are improving, and report cards."
         />
         <Card>
           <CardHeader>

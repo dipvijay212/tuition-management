@@ -18,7 +18,7 @@ export default async function StudentResultsPage() {
     <div className="space-y-6">
       <PageHeader
         title="My Performance & Results"
-        description="Detailed academic progression, score deltas, subject mastery, and formal report cards."
+        description="Your exam results, how you are improving, and your report cards."
       />
 
       {perf && perf.summary.total_exams > 0 ? (
