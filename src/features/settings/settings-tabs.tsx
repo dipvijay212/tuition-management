@@ -42,7 +42,7 @@ function Toggle({ name, label, defaultChecked, hint }: { name: string; label: st
 export function SettingsTabs({ institute, settings: s, years, grades, smtpConfig }: Props) {
   return (
     <Tabs defaultValue="profile" className="gap-6">
-      <TabsList className="flex-wrap">
+      <TabsList className="max-w-full justify-start overflow-x-auto [scrollbar-width:none]">
         <TabsTrigger value="profile">Institute profile</TabsTrigger>
         <TabsTrigger value="years">Academic years</TabsTrigger>
         <TabsTrigger value="policies">Fees & policies</TabsTrigger>

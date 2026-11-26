@@ -34,7 +34,7 @@ function writeCollapsed(v: boolean) { try { localStorage.setItem(KEY, v ? "1" : 
 
 function Brand({ instituteName, logoUrl, role, collapsed }: { instituteName: string; logoUrl: string | null; role: AppRole; collapsed?: boolean }) {
   return (
-    <Link href={`/${role}`} className={cn("flex items-center gap-3 px-2", collapsed && "justify-center px-0")}>
+    <Link href={`/${role}`} className={cn("flex min-w-0 items-center gap-3 px-2", collapsed && "justify-center px-0")}>
       {logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={logoUrl} alt="" className="size-9 rounded-lg object-cover" />

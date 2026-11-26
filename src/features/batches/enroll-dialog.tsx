@@ -62,7 +62,7 @@ export function EnrollDialog({ batchId, today, seatsLeft }: { batchId: string; t
             ))}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5"><Label htmlFor="enroll-date">Start date</Label><DateInput id="enroll-date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          <div className="min-w-0 space-y-1.5"><Label htmlFor="enroll-date">Start date</Label><DateInput id="enroll-date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
           <div className="flex items-end text-sm text-muted-foreground">{selected.size} selected</div>
         </div>
         {overCapacity && (

@@ -93,7 +93,7 @@ export function ExamHistoryTable({ student, timeline, summary }: ExamHistoryTabl
                   <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 pl-7 sm:pl-0">
                     {/* Score */}
                     <div className="text-right">
-                      <div className="font-bold text-sm text-foreground">
+                      <div className="font-bold text-sm text-foreground whitespace-nowrap">
                         {exam.total_obtained} / {exam.total_max}
                       </div>
                       <div className="text-xs text-muted-foreground">Marks</div>

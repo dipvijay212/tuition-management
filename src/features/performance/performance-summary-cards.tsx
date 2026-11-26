@@ -45,7 +45,10 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
     net_improvement,
     trend,
     current_rank,
+    current_rank_out_of,
     rank_delta,
+    trend_delta,
+    trend_window,
     pass_rate,
     attendance_percentage,
   } = summary;
@@ -65,7 +68,7 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
       {/* 1. Latest Exam Score */}
       <Card className="overflow-hidden">
         <CardContent className="p-4">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span className="font-medium uppercase tracking-wider">Latest Score</span>
             <DeltaBadge delta={latest_delta} />
           </div>
@@ -91,7 +94,7 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
       {/* 2. Trajectory & Growth */}
       <Card className="overflow-hidden">
         <CardContent className="p-4">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span className="font-medium uppercase tracking-wider">Growth Trend</span>
             <span
               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${
@@ -111,6 +114,9 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             Net growth since 1st test
+            {trend_delta !== null && trend_window > 1 && (
+              <> · last {trend_window} avg {trend_delta >= 0 ? "+" : ""}{trend_delta} pts</>
+            )}
           </p>
         </CardContent>
       </Card>
@@ -118,7 +124,7 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
       {/* 3. Batch Standing & Rank */}
       <Card className="overflow-hidden">
         <CardContent className="p-4">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span className="font-medium uppercase tracking-wider">Class Rank</span>
             {rank_delta !== null && (
               <span
@@ -126,7 +132,7 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
                   rank_delta > 0 ? "text-emerald-600 dark:text-emerald-400" : rank_delta < 0 ? "text-destructive" : "text-muted-foreground"
                 }`}
               >
-                {rank_delta > 0 ? `↑ ${rank_delta} places` : rank_delta < 0 ? `↓ ${Math.abs(rank_delta)} places` : "Same rank"}
+                {rank_delta > 0 ? `↑ ${rank_delta} ${rank_delta === 1 ? "place" : "places"}` : rank_delta < 0 ? `↓ ${Math.abs(rank_delta)} ${rank_delta === -1 ? "place" : "places"}` : "Same rank"}
               </span>
             )}
           </div>
@@ -134,10 +140,13 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
             <span className="text-2xl font-bold tracking-tight text-foreground">
               {current_rank ? `#${current_rank}` : "—"}
             </span>
+            {current_rank && current_rank_out_of ? (
+              <span className="text-xs text-muted-foreground">of {current_rank_out_of}</span>
+            ) : null}
             <Award className="size-4 text-amber-500" />
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Peak rank achieved: #{highest_percentage ? Math.round(highest_percentage) : "—"}%
+            Best score: {highest_percentage}%
           </p>
         </CardContent>
       </Card>
@@ -145,7 +154,7 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
       {/* 4. Average & Pass Rate */}
       <Card className="overflow-hidden">
         <CardContent className="p-4">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span className="font-medium uppercase tracking-wider">Cumulative Avg</span>
             <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="size-3" /> {pass_rate}% Pass
@@ -161,9 +170,9 @@ export function PerformanceSummaryCards({ summary }: { summary: PerformanceSumma
       </Card>
 
       {/* 5. Attendance Factor */}
-      <Card className="overflow-hidden">
+      <Card className="col-span-2 overflow-hidden lg:col-span-1">
         <CardContent className="p-4">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span className="font-medium uppercase tracking-wider">Attendance</span>
             {attendance_percentage !== null && (
               <span

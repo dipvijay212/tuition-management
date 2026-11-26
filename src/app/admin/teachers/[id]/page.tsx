@@ -48,7 +48,7 @@ export default async function TeacherProfilePage(props: PageProps<"/admin/teache
             </dl>
             <div>
               <div className="mb-2 text-xs text-muted-foreground">Subjects</div>
-              <div className="flex flex-wrap gap-1.5">{(subjects ?? []).length ? subjects!.map((s) => <span key={s.id} className="rounded-md bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">{s.name}</span>) : <span className="text-sm text-muted-foreground">None assigned</span>}</div>
+              <div className="flex flex-wrap gap-1.5">{(subjects ?? []).length ? [...new Set(subjects!.map((s) => s.name))].map((name) => <span key={name} className="rounded-md bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">{name}</span>) : <span className="text-sm text-muted-foreground">None assigned</span>}</div>
             </div>
           </CardContent>
         </Card>

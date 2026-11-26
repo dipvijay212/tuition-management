@@ -29,6 +29,9 @@ export interface ExamTimelineItem {
   batch_highest: number | null;
   batch_difference: number | null;
   total_students_in_exam: number;
+  /** Attendance % in the period since the previous exam (up to this exam's date). */
+  attendance_pct: number | null;
+  attendance_sessions: number;
   subjects: SubjectMark[];
 }
 
@@ -49,6 +52,9 @@ export interface SubjectTrendItem {
   average_percentage: number;
   delta: number | null;
   status: "strength" | "neutral" | "needs_attention";
+  first_percentage: number;
+  best_percentage: number;
+  change_since_first: number | null;
 }
 
 export interface MonthlyAttendanceItem {
@@ -69,7 +75,19 @@ export interface PerformanceSummary {
   lowest_percentage: number;
   latest_delta: number | null;
   net_improvement: number;
+  /** Rolling trend: average of the last `trend_window` exams vs the window before. */
   trend: "improving" | "declining" | "steady";
+  trend_delta: number | null;
+  trend_window: number;
+  recent_average: number | null;
+  prior_average: number | null;
+  /** Latest exam dropped noticeably but the rolling trend isn't declining. */
+  latest_dip: boolean;
+  first_percentage: number | null;
+  first_exam_name: string | null;
+  best_exam_name: string | null;
+  latest_exam_name: string | null;
+  current_rank_out_of: number | null;
   current_rank: number | null;
   rank_delta: number | null;
   attendance_percentage: number | null;
@@ -82,7 +100,6 @@ export interface StudentPerformanceData {
     id: string;
     full_name: string;
     admission_no: string;
-    roll_no: string | null;
     status: string;
     class_name: string | null;
     batches: Array<{ id: string; name: string }>;

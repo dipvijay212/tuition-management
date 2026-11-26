@@ -204,8 +204,8 @@ export function InstallAppCard({
                 </span>
                 <div>
                   <span className="font-medium">Tap the Share button</span>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                    In Safari&apos;s bottom toolbar, tap the Share icon (<Share className="inline size-3.5" />).
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    In Safari&apos;s bottom toolbar, tap the Share icon (<Share className="inline size-3.5 align-text-bottom" />).
                   </p>
                 </div>
               </div>
@@ -216,8 +216,8 @@ export function InstallAppCard({
                 </span>
                 <div>
                   <span className="font-medium">Select &quot;Add to Home Screen&quot;</span>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                    Scroll down the share sheet and tap <PlusSquare className="inline size-3.5" /> <strong>Add to Home Screen</strong>.
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Scroll down the share sheet and tap <PlusSquare className="inline size-3.5 align-text-bottom" /> <strong>Add to Home Screen</strong>.
                   </p>
                 </div>
               </div>
@@ -304,7 +304,7 @@ export function InstallAppMenuItem({ role }: { role: AppRole }) {
           <DialogHeader>
             <DialogTitle>Install {roleName} App</DialogTitle>
             <DialogDescription>
-              To install this app on your device, use your browser&apos;s menu (⋮) or tap Share (<Share className="inline size-3.5" />) &gt; &quot;Add to Home Screen&quot;.
+              To install this app on your device, use your browser&apos;s menu (⋮) or tap Share (<Share className="inline size-3.5 align-text-bottom" />) &gt; &quot;Add to Home Screen&quot;.
             </DialogDescription>
           </DialogHeader>
           <Button variant="outline" onClick={() => setShowGuide(false)} className="w-full">

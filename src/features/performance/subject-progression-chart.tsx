@@ -46,13 +46,14 @@ export function SubjectProgressionChart({
     };
 
     t.subjects.forEach((sub) => {
-      row[sub.subject] = sub.is_absent || sub.obtained === null ? null : sub.percentage;
+      // Key by subject id: names are snapshotted per exam and may change (rename, casing).
+      row[sub.subject_id || sub.subject] = sub.is_absent || sub.obtained === null ? null : sub.percentage;
     });
 
     return row;
   });
 
-  const subjectNames = subjectTrends.map((s) => s.subject_name);
+  const subjectLines = subjectTrends.map((s) => ({ key: s.subject_id || s.subject_name, name: s.subject_name }));
 
   return (
     <Card>
@@ -84,11 +85,12 @@ export function SubjectProgressionChart({
                 iconType="circle"
                 wrapperStyle={{ paddingBottom: 12, fontSize: 12 }}
               />
-              {subjectNames.map((name, i) => (
+              {subjectLines.map(({ key, name }, i) => (
                 <Line
-                  key={name}
+                  key={key}
                   type="monotone"
-                  dataKey={name}
+                  dataKey={key}
+                  name={name}
                   stroke={COLORS[i % COLORS.length]}
                   strokeWidth={2}
                   dot={{ r: 3 }}

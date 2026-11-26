@@ -89,7 +89,7 @@ export default async function StudentProfile(props: PageProps<"/admin/students/[
       </Card>
 
       <Tabs defaultValue="overview" className="gap-4">
-        <TabsList className="flex-wrap">
+        <TabsList className="max-w-full justify-start overflow-x-auto [scrollbar-width:none]">
           {["overview", "batches", "fees", "attendance", "results", "documents", "activity"].map((t) => <TabsTrigger key={t} value={t}>{titleCase(t)}</TabsTrigger>)}
         </TabsList>
 

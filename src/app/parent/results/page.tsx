@@ -52,14 +52,14 @@ export default async function ParentResultsPage(props: PageProps<"/parent/result
       {/* Multi-child selector pills if parent has multiple children */}
       {children.length > 1 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <span className="text-xs font-semibold text-muted-foreground mr-1">Select Child:</span>
+          <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-muted-foreground mr-1">Select Child:</span>
           {children.map((child) => {
             const isSelected = child.id === activeChild.id;
             return (
               <Link
                 key={child.id}
                 href={`/parent/results?child=${child.id}`}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
                   isSelected
                     ? "bg-primary text-primary-foreground shadow-xs"
                     : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"

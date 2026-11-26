@@ -150,3 +150,17 @@
   .no-print { display: none !important; }
   body { background: white !important; }
 }
+
+/*
+ * Horizontal scroll hint for wide tables on small screens: a soft shadow shows on the side that
+ * has more content and disappears at the end (background-attachment: local covers it).
+ */
+@layer components {
+  .scroll-shadow-x {
+    background:
+      linear-gradient(to right, var(--card) 30%, transparent) left center / 2.5rem 100% no-repeat local,
+      linear-gradient(to left, var(--card) 30%, transparent) right center / 2.5rem 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, color-mix(in oklch, var(--foreground) 14%, transparent), transparent) left center / 0.75rem 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, color-mix(in oklch, var(--foreground) 14%, transparent), transparent) right center / 0.75rem 100% no-repeat scroll;
+  }
+}

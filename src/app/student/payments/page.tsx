@@ -38,8 +38,8 @@ export default async function StudentPaymentsPage() {
                 <ReceiptDialog
                   receipt={{
                     receiptNo,
-                    studentName: "My Receipt",
-                    admissionNo: "—",
+                    studentName: r.students?.full_name ?? "Student",
+                    admissionNo: r.students?.admission_no ?? "—",
                     amount: Number(r.amount),
                     paymentDate: r.payment_date,
                     method: r.method,

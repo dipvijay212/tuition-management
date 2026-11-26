@@ -33,6 +33,9 @@ interface TooltipPayloadItem {
     grade: string | null;
     rank: number | null;
     is_pass: boolean;
+    attendance_pct: number | null;
+    attendance_sessions: number;
+    total_students_in_exam: number;
   };
 }
 
@@ -68,16 +71,27 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Toolti
           </span>
         </div>
       )}
-      {data.batch_average !== null && (
+      {data.batch_average !== null && data.total_students_in_exam > 1 && (
         <div className="flex items-center justify-between gap-4">
           <span className="text-muted-foreground">Batch Average:</span>
           <span className="font-medium">{data.batch_average}%</span>
         </div>
       )}
+      {data.attendance_pct !== null && (
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-muted-foreground">Attendance before exam:</span>
+          <span className="font-medium">
+            {data.attendance_pct}% <span className="text-muted-foreground">({data.attendance_sessions} classes)</span>
+          </span>
+        </div>
+      )}
       {data.rank && (
         <div className="flex items-center justify-between gap-4">
           <span className="text-muted-foreground">Class Rank:</span>
-          <span className="font-medium">#{data.rank}</span>
+          <span className="font-medium">
+            #{data.rank}
+            {data.total_students_in_exam > 0 && <span className="text-muted-foreground"> of {data.total_students_in_exam}</span>}
+          </span>
         </div>
       )}
       {data.grade && (
@@ -117,9 +131,17 @@ export function PerformanceTrendChart({ timeline }: { timeline: ExamTimelineItem
     grade: t.grade,
     rank: t.rank,
     is_pass: t.is_pass,
+    attendance_pct: t.attendance_pct,
+    attendance_sessions: t.attendance_sessions,
+    total_students_in_exam: t.total_students_in_exam,
   }));
 
-  const allAverages = timeline.map((t) => t.batch_average).filter((v): v is number => v !== null);
+  // A batch average is only a benchmark when others sat the exam too.
+  const hasPeers = timeline.some((t) => t.total_students_in_exam > 1);
+  const hasAttendance = timeline.some((t) => t.attendance_pct !== null);
+  const allAverages = hasPeers
+    ? timeline.map((t) => t.batch_average).filter((v): v is number => v !== null)
+    : [];
   const overallBatchAvg = allAverages.length > 0
     ? Math.round((allAverages.reduce((a, b) => a + b, 0) / allAverages.length) * 10) / 10
     : null;
@@ -130,7 +152,8 @@ export function PerformanceTrendChart({ timeline }: { timeline: ExamTimelineItem
         <div>
           <CardTitle className="text-base font-semibold">Overall Performance Trajectory</CardTitle>
           <CardDescription>
-            Chronological progression across exams vs class batch benchmark
+            {hasPeers ? "Score across exams vs the batch average" : "Score across exams"}
+            {hasAttendance ? ", with attendance in the run-up to each exam" : ""}
           </CardDescription>
         </div>
         {overallBatchAvg !== null && (
@@ -170,15 +193,29 @@ export function PerformanceTrendChart({ timeline }: { timeline: ExamTimelineItem
                 dot={{ r: 4, strokeWidth: 2, fill: "var(--background)" }}
                 activeDot={{ r: 6, strokeWidth: 2 }}
               />
-              <Line
-                type="monotone"
-                dataKey="batch_average"
-                name="Batch Average (%)"
-                stroke="var(--series-2, #94a3b8)"
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                dot={{ r: 3 }}
-              />
+              {hasPeers && (
+                <Line
+                  type="monotone"
+                  dataKey="batch_average"
+                  name="Batch Average (%)"
+                  stroke="var(--series-2, #94a3b8)"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={{ r: 3 }}
+                />
+              )}
+              {hasAttendance && (
+                <Line
+                  type="monotone"
+                  dataKey="attendance_pct"
+                  name="Attendance before exam (%)"
+                  stroke="var(--series-3, #f59e0b)"
+                  strokeWidth={2}
+                  strokeDasharray="2 4"
+                  dot={{ r: 4, strokeWidth: 2, fill: "var(--background)" }}
+                  connectNulls
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
         </div>

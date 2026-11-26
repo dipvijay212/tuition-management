@@ -27,7 +27,7 @@ export default async function TeacherProfile() {
             <div><dt className="text-xs text-muted-foreground">Qualification</dt><dd>{t.qualification ?? "—"}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Specialization</dt><dd>{t.specialization ?? "—"}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Joined</dt><dd>{formatDate(t.joining_date)}</dd></div>
-            <div><dt className="text-xs text-muted-foreground">Subjects</dt><dd>{(subs ?? []).map((s) => s.name).join(", ") || "—"}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Subjects</dt><dd>{[...new Set((subs ?? []).map((s) => s.name))].join(", ") || "—"}</dd></div>
           </dl>
         </CardContent></Card>
       )}

@@ -20,6 +20,7 @@ import { PerformanceTrendChart } from "./performance-trend-chart";
 import { SubjectMasteryCards } from "./subject-mastery-cards";
 import { SubjectProgressionChart } from "./subject-progression-chart";
 import { ExamHistoryTable } from "./exam-history-table";
+import { ProgressJourneyCard } from "./progress-journey-card";
 
 export function StudentPerformanceView({ data }: { data: StudentPerformanceData }) {
   const { student, summary, timeline, subject_trends } = data;
@@ -27,6 +28,11 @@ export function StudentPerformanceView({ data }: { data: StudentPerformanceData 
 
   const isImproving = summary.trend === "improving";
   const isDeclining = summary.trend === "declining";
+  const w = summary.trend_window;
+  const windowText = w === 1 ? "the latest exam vs the one before" : `the last ${w} exams vs the ${w} before`;
+  const dipNote = summary.latest_dip
+    ? ` The latest test dipped by ${Math.abs(summary.latest_delta ?? 0)} pts — a single dip is worth watching, not yet a trend.`
+    : "";
 
   return (
     <div className="space-y-6">
@@ -61,18 +67,22 @@ export function StudentPerformanceView({ data }: { data: StudentPerformanceData 
             </span>
             <div>
               <h2 className="font-bold text-base sm:text-lg">
-                {isImproving
-                  ? `Performance Trending Up (+${summary.latest_delta}% in latest test)`
+                {summary.total_exams < 2
+                  ? "First exam recorded — progress tracking starts with the next one"
+                  : isImproving
+                  ? `Improving: averaging ${summary.recent_average}% recently, up ${summary.trend_delta} pts`
                   : isDeclining
-                  ? `Score Drop Detected (${summary.latest_delta}% in latest test)`
-                  : "Consistent & Steady Performance Track Record"}
+                  ? `Declining: averaging ${summary.recent_average}% recently, down ${Math.abs(summary.trend_delta ?? 0)} pts`
+                  : `Steady: averaging ${summary.recent_average}% recently`}
               </h2>
               <p className="text-xs opacity-90 mt-0.5">
-                {isImproving
-                  ? `Student has gained +${summary.net_improvement}% overall since baseline examination.`
-                  : isDeclining
-                  ? "Targeted focus and revision in weaker subjects will help regain momentum."
-                  : `Maintained a steady average of ${summary.average_percentage}% across ${summary.total_exams} examinations.`}
+                {summary.total_exams < 2
+                  ? `Scored ${summary.current_percentage}% in ${summary.latest_exam_name}.`
+                  : `Comparing ${windowText} (${summary.prior_average}% → ${summary.recent_average}%). ${
+                      summary.net_improvement >= 0 ? "+" : ""
+                    }${summary.net_improvement} pts since the first exam.${dipNote}${
+                      isDeclining ? " Targeted revision in focus subjects will help regain momentum." : ""
+                    }`}
               </p>
             </div>
           </div>
@@ -90,23 +100,27 @@ export function StudentPerformanceView({ data }: { data: StudentPerformanceData 
 
       {/* Main Analysis Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="flex-wrap">
+        <TabsList className="max-w-full justify-start overflow-x-auto [scrollbar-width:none]">
           <TabsTrigger value="overview" className="gap-1.5">
-            <BarChart3 className="size-3.5" />
-            Progression Overview
+            <BarChart3 className="hidden size-3.5 sm:block" />
+            <span className="sm:hidden">Overview</span>
+            <span className="hidden sm:inline">Progression Overview</span>
           </TabsTrigger>
           <TabsTrigger value="subjects" className="gap-1.5">
-            <BookOpen className="size-3.5" />
-            Subject Mastery ({subject_trends.length})
+            <BookOpen className="hidden size-3.5 sm:block" />
+            <span className="sm:hidden">Subjects ({subject_trends.length})</span>
+            <span className="hidden sm:inline">Subject Mastery ({subject_trends.length})</span>
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5">
-            <Layers className="size-3.5" />
-            Exam History & Reports ({timeline.length})
+            <Layers className="hidden size-3.5 sm:block" />
+            <span className="sm:hidden">History ({timeline.length})</span>
+            <span className="hidden sm:inline">Exam History & Reports ({timeline.length})</span>
           </TabsTrigger>
         </TabsList>
 
         {/* Tab 1: Progression Overview */}
         <TabsContent value="overview" className="space-y-6">
+          <ProgressJourneyCard summary={summary} subjectTrends={subject_trends} />
           <PerformanceTrendChart timeline={timeline} />
           {subject_trends.length > 0 && (
             <SubjectProgressionChart timeline={timeline} subjectTrends={subject_trends} />

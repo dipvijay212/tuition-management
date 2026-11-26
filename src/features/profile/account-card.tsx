@@ -30,7 +30,7 @@ export function AccountCard({
               {({ errors }) => (
                 <>
                   <Field label="Display name" name="full_name" error={errors.full_name}><Input id="full_name" name="full_name" defaultValue={name} /></Field>
-                  <dl className="grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-muted-foreground">Email</dt><dd>{email ?? "—"}</dd></div><div><dt className="text-xs text-muted-foreground">Mobile</dt><dd>{phone ?? "—"}</dd></div></dl>
+                  <dl className="grid gap-3 text-sm sm:grid-cols-2"><div className="min-w-0"><dt className="text-xs text-muted-foreground">Email</dt><dd className="break-all">{email ?? "—"}</dd></div><div><dt className="text-xs text-muted-foreground">Mobile</dt><dd>{phone ?? "—"}</dd></div></dl>
                   <SubmitButton variant="outline">Save</SubmitButton>
                 </>
               )}
