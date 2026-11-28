@@ -58,7 +58,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, redirect: safeNext });
   } catch (e: any) {
-    const message = e instanceof ApiError ? e.message : e?.message || "Something went wrong. Please try again.";
-    return NextResponse.json({ error: message }, { status: e instanceof ApiError ? e.status : 400 });
+    if (e instanceof ApiError) {
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    }
+    console.error("[/api/auth/login] unexpected error:", e);
+    return NextResponse.json(
+      { error: e?.message || "Something went wrong. Please try again." },
+      { status: 500 }
+    );
   }
 }

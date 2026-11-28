@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { buildApiUrl } from "@/lib/api/server";
 
 /**
  * Proxies stored files from the backend. Private files carry a short-lived signature
@@ -6,7 +7,7 @@ import type { NextRequest } from "next/server";
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
-  const url = new URL(`${process.env.API_URL!.replace(/\/$/, "")}/files/${path.map(encodeURIComponent).join("/")}`);
+  const url = buildApiUrl(`/files/${path.map(encodeURIComponent).join("/")}`);
   url.search = request.nextUrl.search;
   const res = await fetch(url, { headers: { "x-internal-key": process.env.API_INTERNAL_KEY ?? "" }, cache: "no-store" });
   if (!res.ok) return new Response(res.status === 403 ? "This file link has expired." : "File not found.", { status: res.status });

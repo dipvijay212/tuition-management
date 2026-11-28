@@ -6,8 +6,7 @@ const STATIC_PRECACHE = [
   "/icon.svg",
   "/icon-maskable.svg",
   "/icon-192.png",
-  "/icon-512.png",
-  "/favicon.ico"
+  "/icon-512.png"
 ];
 
 // Install: precache offline page and icons

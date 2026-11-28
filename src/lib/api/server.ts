@@ -14,13 +14,22 @@ type Query = Record<string, string | number | boolean | null | undefined | (stri
 type Options = { method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; body?: unknown; query?: Query; token?: string | null; form?: FormData };
 
 function apiBase() {
-  const url = process.env.API_URL;
-  if (!url) throw new Error("API_URL is not configured");
-  return url.replace(/\/$/, "");
+  const raw = process.env.API_URL?.trim().replace(/^["']|["']$/g, "");
+  if (!raw) throw new Error("API_URL is not configured.");
+  if (!/^https?:\/\//i.test(raw)) {
+    throw new Error("API_URL is invalid: it must include http:// or https://.");
+  }
+  return raw.replace(/\/+$/, "");
 }
 
-function buildUrl(path: string, query?: Query) {
-  const url = new URL(apiBase() + path);
+export function buildApiUrl(path: string, query?: Query) {
+  let url: URL;
+  try {
+    url = new URL(apiBase() + path);
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("API_URL")) throw err;
+    throw new Error("API_URL is invalid: check the configured backend URL.");
+  }
   for (const [k, v] of Object.entries(query ?? {})) {
     if (v === undefined || v === null || v === "") continue;
     if (Array.isArray(v)) v.forEach((x) => url.searchParams.append(k, String(x)));
@@ -43,7 +52,7 @@ export async function api<T = unknown>(path: string, opts: Options = {}): Promis
     h["content-type"] = "application/json";
     body = JSON.stringify(opts.body);
   }
-  const res = await fetch(buildUrl(path, opts.query), { method: opts.method ?? (body ? "POST" : "GET"), headers: h, body, cache: "no-store" });
+  const res = await fetch(buildApiUrl(path, opts.query), { method: opts.method ?? (body ? "POST" : "GET"), headers: h, body, cache: "no-store" });
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) throw new ApiError(res.status, data?.error ?? "Something went wrong. Please try again.", data?.fieldErrors);
