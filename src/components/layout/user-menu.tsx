@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/shared/theme-provider";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { Building2, Check, LogOut, Moon, Sun, UserCircle, Repeat } from "lucide-react";

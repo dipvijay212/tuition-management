@@ -1,7 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { api, ApiError, clientMeta, setSessionCookie } from "@/lib/api/server";
 import { ROLE_HOME, type AppRole } from "@/lib/auth/session";
+import type { InstituteOption } from "@/features/auth/actions";
 import { cookies } from "next/headers";
+
+type LoginApiResponse =
+  | {
+      token: string;
+      expiresAt: string;
+      persistent: boolean;
+      roles: AppRole[];
+      home: string;
+      institute: { code: string };
+    }
+  | {
+      requires_institute_selection: true;
+      institutes: InstituteOption[];
+    };
 
 const INSTITUTE_COOKIE = "tc_institute";
 async function rememberInstituteCode(code: string) {
@@ -26,7 +41,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const res = await api<any>("/auth/login", {
+    const res = await api<LoginApiResponse>("/auth/login", {
       method: "POST",
       token: null,
       body: {
@@ -38,7 +53,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    if (res?.requires_institute_selection) {
+    if ("requires_institute_selection" in res) {
       return NextResponse.json({
         requiresInstituteSelection: true,
         institutes: res.institutes,
@@ -57,13 +72,14 @@ export async function POST(req: NextRequest) {
         : res.home;
 
     return NextResponse.json({ ok: true, redirect: safeNext });
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (e instanceof ApiError) {
       return NextResponse.json({ error: e.message }, { status: e.status });
     }
     console.error("[/api/auth/login] unexpected error:", e);
+    const message = e instanceof Error ? e.message : "Something went wrong. Please try again.";
     return NextResponse.json(
-      { error: e?.message || "Something went wrong. Please try again." },
+      { error: message },
       { status: 500 }
     );
   }

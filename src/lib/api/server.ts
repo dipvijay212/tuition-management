@@ -54,8 +54,26 @@ export async function api<T = unknown>(path: string, opts: Options = {}): Promis
   }
   const res = await fetch(buildApiUrl(path, opts.query), { method: opts.method ?? (body ? "POST" : "GET"), headers: h, body, cache: "no-store" });
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new ApiError(res.status, data?.error ?? "Something went wrong. Please try again.", data?.fieldErrors);
+  let data: Record<string, unknown> | null = null;
+  if (text) {
+    try {
+      data = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      // Upstream returned non-JSON (e.g. plain-text or HTML 500 error page).
+    }
+  }
+  if (!res.ok) {
+    const serverMsg =
+      typeof data?.error === "string"
+        ? data.error
+        : text && text.trim().length < 200 && !text.trim().startsWith("<")
+          ? text.trim()
+          : `Backend request failed (${res.status}).`;
+    throw new ApiError(res.status, serverMsg, data?.fieldErrors as Record<string, string[]> | undefined);
+  }
+  if (data === null && text) {
+    throw new ApiError(res.status, "Backend returned an invalid non-JSON response.");
+  }
   return data as T;
 }
 
