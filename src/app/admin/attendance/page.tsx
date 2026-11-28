@@ -21,7 +21,6 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterBar, SelectFilter, DateFilter, SearchInput } from "@/components/shared/filters";
 import { Button } from "@/components/ui/button";
-import { TakeAttendanceDialog } from "@/features/attendance/take-attendance-dialog";
 import { formatDate, formatTime, todayIn, DAYS } from "@/lib/utilities/format";
 import { pageParams, str } from "@/lib/utilities/query";
 
@@ -201,7 +200,6 @@ export default async function AdminAttendancePage(props: PageProps<"/admin/atten
 
   const detail = await detailP!;
   const { data: batches, error: batchError } = detail.batchesRes;
-  const { data: subjects } = detail.subjectsRes;
   const { data: todaySessions } = detail.todayRes;
   const { data: historySessions, count: historyCount, error: historyError } = detail.historyRes;
   if (batchError) throw batchError;
@@ -329,24 +327,24 @@ export default async function AdminAttendancePage(props: PageProps<"/admin/atten
                       </span>
                     )}
 
-                    <TakeAttendanceDialog
-                      batches={[{ id: b.id, name: b.name }]}
-                      subjects={subjects ?? []}
-                      defaultDate={today}
-                      defaultBatchId={b.id}
-                      autoStart={true}
-                      initialSessionId={todaySession?.id}
-                      trigger={
-                        <Button
-                          size="sm"
-                          variant={isMarkedToday ? "outline" : "default"}
-                          className="font-semibold"
-                        >
-                          <CheckCircle2 className="size-3.5 mr-1.5" />
-                          {isMarkedToday ? "Edit Today's Attendance" : "Take Attendance"}
-                        </Button>
+                    <Button
+                      size="sm"
+                      variant={isMarkedToday ? "outline" : "default"}
+                      className="font-semibold"
+                      nativeButton={false}
+                      render={
+                        <Link
+                          href={
+                            todaySession
+                              ? `/admin/attendance/take?session=${todaySession.id}&class=${selectedClassId}`
+                              : `/admin/attendance/take?batch=${b.id}&date=${today}&class=${selectedClassId}`
+                          }
+                        />
                       }
-                    />
+                    >
+                      <CheckCircle2 className="size-3.5 mr-1.5" />
+                      {isMarkedToday ? "Edit Today's Attendance" : "Take Attendance"}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -462,18 +460,18 @@ export default async function AdminAttendancePage(props: PageProps<"/admin/atten
               cell: (r) => {
                 const isMarked = !!r.attendance_submitted_at;
                 return (
-                  <TakeAttendanceDialog
-                    batches={batchList.map((x) => ({ id: x.id, name: x.name }))}
-                    subjects={subjects ?? []}
-                    defaultDate={r.session_date}
-                    defaultBatchId={r.batch_id}
-                    initialSessionId={r.id}
-                    trigger={
-                      <Button variant={isMarked ? "outline" : "default"} size="sm">
-                        {isMarked ? "View / Edit Attendance" : "Take Attendance"}
-                      </Button>
+                  <Button
+                    variant={isMarked ? "outline" : "default"}
+                    size="sm"
+                    nativeButton={false}
+                    render={
+                      <Link
+                        href={`/admin/attendance/take?session=${r.id}&class=${selectedClassId}`}
+                      />
                     }
-                  />
+                  >
+                    {isMarked ? "View / Edit Attendance" : "Take Attendance"}
+                  </Button>
                 );
               },
             },

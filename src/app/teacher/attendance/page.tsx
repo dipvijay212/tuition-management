@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import {
   Layers,
   Users,
@@ -17,7 +18,6 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterBar, SelectFilter, DateFilter } from "@/components/shared/filters";
 import { Button } from "@/components/ui/button";
-import { TakeAttendanceDialog } from "@/features/attendance/take-attendance-dialog";
 import { formatDate, formatTime, todayIn, DAYS } from "@/lib/utilities/format";
 import { pageParams, str } from "@/lib/utilities/query";
 
@@ -52,15 +52,6 @@ export default async function TeacherAttendancePage(props: PageProps<"/teacher/a
   const historyCount = data.history.count;
 
   const batches = data.batches;
-
-  // Collect unique subjects for the dialog
-  const subjectMap = new Map<string, { id: string; name: string }>();
-  for (const b of batches) {
-    for (const bs of b.batch_subjects ?? []) {
-      if (bs.subjects) subjectMap.set(bs.subjects.id, bs.subjects);
-    }
-  }
-  const subjectsList = Array.from(subjectMap.values());
 
   const todaySessionByBatch = new Map((todaySessions ?? []).map((s) => [s.batch_id, s]));
   const todayStatsBySession = new Map<string, { present: number; absent: number }>();
@@ -168,24 +159,24 @@ export default async function TeacherAttendancePage(props: PageProps<"/teacher/a
                       </span>
                     )}
 
-                    <TakeAttendanceDialog
-                      batches={[{ id: b.id, name: b.name }]}
-                      subjects={subjectsList}
-                      defaultDate={today}
-                      defaultBatchId={b.id}
-                      autoStart={true}
-                      initialSessionId={todaySession?.id}
-                      trigger={
-                        <Button
-                          size="sm"
-                          variant={isMarkedToday ? "outline" : "default"}
-                          className="font-semibold"
-                        >
-                          <CheckCircle2 className="size-3.5 mr-1.5" />
-                          {isMarkedToday ? "Edit Today's Attendance" : "Take Attendance"}
-                        </Button>
+                    <Button
+                      size="sm"
+                      variant={isMarkedToday ? "outline" : "default"}
+                      className="font-semibold"
+                      nativeButton={false}
+                      render={
+                        <Link
+                          href={
+                            todaySession
+                              ? `/teacher/attendance/take?session=${todaySession.id}`
+                              : `/teacher/attendance/take?batch=${b.id}&date=${today}`
+                          }
+                        />
                       }
-                    />
+                    >
+                      <CheckCircle2 className="size-3.5 mr-1.5" />
+                      {isMarkedToday ? "Edit Today's Attendance" : "Take Attendance"}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -301,18 +292,14 @@ export default async function TeacherAttendancePage(props: PageProps<"/teacher/a
               cell: (r) => {
                 const isMarked = !!r.attendance_submitted_at;
                 return (
-                  <TakeAttendanceDialog
-                    batches={batches.map((x) => ({ id: x.id, name: x.name }))}
-                    subjects={subjectsList}
-                    defaultDate={r.session_date}
-                    defaultBatchId={r.batch_id}
-                    initialSessionId={r.id}
-                    trigger={
-                      <Button variant={isMarked ? "outline" : "default"} size="sm">
-                        {isMarked ? "View / Edit Attendance" : "Take Attendance"}
-                      </Button>
-                    }
-                  />
+                  <Button
+                    variant={isMarked ? "outline" : "default"}
+                    size="sm"
+                    nativeButton={false}
+                    render={<Link href={`/teacher/attendance/take?session=${r.id}`} />}
+                  >
+                    {isMarked ? "View / Edit Attendance" : "Take Attendance"}
+                  </Button>
                 );
               },
             },
