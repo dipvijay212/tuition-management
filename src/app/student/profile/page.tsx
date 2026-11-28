@@ -15,7 +15,13 @@ export default async function StudentProfile() {
       <PageHeader title="My profile" />
       <div className="space-y-6">
         {me && <StudentDetails studentId={me.id} />}
-        <AccountCard name={ctx.profile.full_name} email={ctx.profile.email} phone={ctx.profile.phone} />
+        <AccountCard
+          name={ctx.profile.full_name}
+          email={ctx.profile.email}
+          phone={ctx.profile.phone}
+          role="student"
+          instituteName={ctx.institute?.name}
+        />
       </div>
     </>
   );

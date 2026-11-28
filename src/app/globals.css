@@ -150,3 +150,32 @@
   .no-print { display: none !important; }
   body { background: white !important; }
 }
+
+/*
+ * Horizontal scroll hint for wide tables on small screens: a soft shadow shows on the side that
+ * has more content and disappears at the end (background-attachment: local covers it).
+ */
+@layer components {
+  .scroll-shadow-x {
+    background:
+      linear-gradient(to right, var(--card) 30%, transparent) left center / 2.5rem 100% no-repeat local,
+      linear-gradient(to left, var(--card) 30%, transparent) right center / 2.5rem 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, color-mix(in oklch, var(--foreground) 14%, transparent), transparent) left center / 0.75rem 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, color-mix(in oklch, var(--foreground) 14%, transparent), transparent) right center / 0.75rem 100% no-repeat scroll;
+  }
+}
+
+/*
+ * Printing while a dialog is open (fee receipt, report card): print only the dialog, as a normal
+ * full-width page, instead of the whole screen with the dialog floating on top.
+ */
+@media print {
+  body:has([data-slot="dialog-content"]) > *:not([data-slot="dialog-portal"]) { display: none !important; }
+  [data-slot="dialog-overlay"], [data-slot="dialog-close"], [data-slot="dialog-portal"] .print\:hidden { display: none !important; }
+  [data-slot="dialog-content"] {
+    position: static !important; transform: none !important; translate: none !important; scale: none !important; --tw-translate-x: 0 !important; --tw-translate-y: 0 !important; --tw-scale-x: 1 !important; --tw-scale-y: 1 !important; inset: auto !important;
+    width: 100% !important; max-width: none !important; max-height: none !important; overflow: visible !important;
+    box-shadow: none !important; --tw-ring-shadow: 0 0 #0000 !important; border-radius: 0 !important; padding: 0 !important;
+    animation: none !important; transition: none !important;
+  }
+}

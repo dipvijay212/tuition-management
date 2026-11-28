@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ActionForm, Field, NativeSelect } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { InstallAppCard } from "@/components/shared/pwa-install";
 import { formatDate, DAYS } from "@/lib/utilities/format";
 import { saveAcademicYear, saveEmailSettings, saveGradingRules, saveInstituteProfile, savePolicies } from "./actions";
 import { TestEmailDialog } from "./test-email-dialog";
@@ -40,12 +42,13 @@ function Toggle({ name, label, defaultChecked, hint }: { name: string; label: st
 export function SettingsTabs({ institute, settings: s, years, grades, smtpConfig }: Props) {
   return (
     <Tabs defaultValue="profile" className="gap-6">
-      <TabsList className="flex-wrap">
+      <TabsList className="max-w-full justify-start overflow-x-auto [scrollbar-width:none]">
         <TabsTrigger value="profile">Institute profile</TabsTrigger>
         <TabsTrigger value="years">Academic years</TabsTrigger>
         <TabsTrigger value="policies">Fees & policies</TabsTrigger>
         <TabsTrigger value="email">Email &amp; SMTP</TabsTrigger>
         <TabsTrigger value="grading">Grading</TabsTrigger>
+        <TabsTrigger value="app">App &amp; PWA</TabsTrigger>
       </TabsList>
 
       <TabsContent value="profile">
@@ -148,12 +151,12 @@ export function SettingsTabs({ institute, settings: s, years, grades, smtpConfig
                 </CardContent>
               </Card>
               <Card>
-                <CardHeader><CardTitle>Fee reminders & notifications</CardTitle><CardDescription>Reminders are sent at most once per fee per schedule point.</CardDescription></CardHeader>
+                <CardHeader><CardTitle>Fee reminders & notifications</CardTitle><CardDescription>Sent automatically every day after 9 AM to the student and linked parents (in-app, and by email when enabled below). Each fee gets each reminder only once.</CardDescription></CardHeader>
                 <CardContent className="grid gap-4 md:grid-cols-2">
                   <Field label="Days before due date" name="fee_reminder_days_before" hint="Comma separated, e.g. 7,3" error={errors.fee_reminder_days_before}><Input id="fee_reminder_days_before" name="fee_reminder_days_before" defaultValue={s.fee_reminder_days_before.join(",")} /></Field>
                   <Field label="Days after due date" name="fee_reminder_days_after" hint="Comma separated, e.g. 3,7,15" error={errors.fee_reminder_days_after}><Input id="fee_reminder_days_after" name="fee_reminder_days_after" defaultValue={s.fee_reminder_days_after.join(",")} /></Field>
                   <Toggle name="fee_reminder_on_due" label="Remind on the due date" defaultChecked={s.fee_reminder_on_due} />
-                  <Toggle name="email_enabled" label="Also send email notifications" defaultChecked={s.email_enabled} hint="Uses the email provider configured in Supabase Auth SMTP." />
+                  <Toggle name="email_enabled" label="Also send email notifications" defaultChecked={s.email_enabled} hint="Sent through the SMTP account configured on the server." />
                 </CardContent>
               </Card>
               <SubmitButton pendingText="Saving…">Save settings</SubmitButton>
@@ -261,6 +264,9 @@ export function SettingsTabs({ institute, settings: s, years, grades, smtpConfig
       </TabsContent>
 
       <TabsContent value="grading"><GradingEditor initial={grades} /></TabsContent>
+      <TabsContent value="app">
+        <InstallAppCard role="admin" instituteName={institute.name} />
+      </TabsContent>
     </Tabs>
   );
 }
@@ -278,8 +284,8 @@ function YearDialog({ trigger, year }: { trigger: React.ReactElement; year?: Tab
               {year && <input type="hidden" name="id" value={year.id} />}
               <Field label="Name" name="name" required error={errors.name}><Input id="name" name="name" defaultValue={year?.name} placeholder="2026-27" /></Field>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Start date" name="start_date" required error={errors.start_date}><Input id="start_date" name="start_date" type="date" defaultValue={year?.start_date} /></Field>
-                <Field label="End date" name="end_date" required error={errors.end_date}><Input id="end_date" name="end_date" type="date" defaultValue={year?.end_date} /></Field>
+                <Field label="Start date" name="start_date" required error={errors.start_date}><DateInput id="start_date" name="start_date" defaultValue={year?.start_date} /></Field>
+                <Field label="End date" name="end_date" required error={errors.end_date}><DateInput id="end_date" name="end_date" defaultValue={year?.end_date} /></Field>
               </div>
               <label className="flex items-center gap-2 text-sm"><Checkbox name="is_current" defaultChecked={year?.is_current ?? true} /> Set as current academic year</label>
               <SubmitButton className="w-full">Save</SubmitButton>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { api } from "@/lib/api/server";
 import type { Tables } from "@/types/database";
@@ -12,7 +13,7 @@ export default async function TeacherResultsPage() {
   await requireRole("teacher");
   type Row = Pick<Tables<"published_results">, "id" | "total_obtained" | "total_max" | "percentage" | "grade" | "is_pass" | "rank"> & {
     examinations: { name: string } | null;
-    students: { full_name: string; admission_no: string } | null;
+    students: { id: string; full_name: string; admission_no: string } | null;
   };
   const { rows: results } = await api<{ rows: Row[] }>("/exams/results");
 
@@ -40,7 +41,13 @@ export default async function TeacherResultsPage() {
             header: "Student",
             cell: (r) => (
               <div>
-                <span className="font-medium">{r.students?.full_name}</span>
+                {r.students?.id ? (
+                  <Link href={`/teacher/students/${r.students.id}`} className="font-medium text-primary hover:underline">
+                    {r.students.full_name}
+                  </Link>
+                ) : (
+                  <span className="font-medium">{r.students?.full_name}</span>
+                )}
                 <div className="text-xs text-muted-foreground">Adm: {r.students?.admission_no}</div>
               </div>
             ),

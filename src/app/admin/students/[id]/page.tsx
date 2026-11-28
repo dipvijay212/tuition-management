@@ -13,6 +13,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatDateTime, formatINR, titleCase, todayIn } from "@/lib/utilities/format";
 import { DocumentUpload, LoginButton, PhotoUpload, StatusDialog, TransferDialog } from "@/features/students/profile-actions";
+import { StudentPerformanceView } from "@/features/performance/student-performance-view";
+import type { StudentPerformanceData } from "@/features/performance/types";
 
 export const metadata: Metadata = { title: "Student profile" };
 
@@ -41,7 +43,10 @@ export default async function StudentProfile(props: PageProps<"/admin/students/[
     audit: { id: number; action: string; created_at: string; reason: string | null }[];
     urls: Record<string, string>;
   };
-  const r = await api<Detail>(`/students/${encodeURIComponent(id)}`).catch(() => null);
+  const [r, perf] = await Promise.all([
+    api<Detail>(`/students/${encodeURIComponent(id)}`).catch(() => null),
+    api<StudentPerformanceData>(`/students/${encodeURIComponent(id)}/performance`).catch(() => null),
+  ]);
   const s = r?.student;
   if (!r || !s) notFound();
   const wrap = <T,>(data: T) => ({ data });
@@ -84,7 +89,7 @@ export default async function StudentProfile(props: PageProps<"/admin/students/[
       </Card>
 
       <Tabs defaultValue="overview" className="gap-4">
-        <TabsList className="flex-wrap">
+        <TabsList className="max-w-full justify-start overflow-x-auto [scrollbar-width:none]">
           {["overview", "batches", "fees", "attendance", "results", "documents", "activity"].map((t) => <TabsTrigger key={t} value={t}>{titleCase(t)}</TabsTrigger>)}
         </TabsList>
 
@@ -191,12 +196,16 @@ export default async function StudentProfile(props: PageProps<"/admin/students/[
           </CardContent></Card>
         </TabsContent>
 
-        <TabsContent value="results">
-          <Card><CardContent className="pt-6">
-            {(results.data ?? []).length === 0 ? <p className="text-sm text-muted-foreground">No published results.</p> : (
-              <ul className="divide-y text-sm">{results.data!.map((r) => <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span className="font-medium">{r.examinations?.name}</span><span className="flex items-center gap-3 tabular-nums">{r.total_obtained}/{r.total_max} · {r.percentage}% · Grade {r.grade ?? "—"} · Rank {r.rank ?? "—"} <StatusBadge status={r.is_pass ? "paid" : "absent"} label={r.is_pass ? "Pass" : "Fail"} /></span></li>)}</ul>
-            )}
-          </CardContent></Card>
+        <TabsContent value="results" className="space-y-6">
+          {perf ? (
+            <StudentPerformanceView data={perf} />
+          ) : (
+            <Card><CardContent className="pt-6">
+              {(results.data ?? []).length === 0 ? <p className="text-sm text-muted-foreground">No published results.</p> : (
+                <ul className="divide-y text-sm">{results.data!.map((r) => <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span className="font-medium">{r.examinations?.name}</span><span className="flex items-center gap-3 tabular-nums">{r.total_obtained}/{r.total_max} · {r.percentage}% · Grade {r.grade ?? "—"} · Rank {r.rank ?? "—"} <StatusBadge status={r.is_pass ? "paid" : "absent"} label={r.is_pass ? "Pass" : "Fail"} /></span></li>)}</ul>
+              )}
+            </CardContent></Card>
+          )}
         </TabsContent>
 
         <TabsContent value="documents">

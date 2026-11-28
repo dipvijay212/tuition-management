@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { selectClass } from "@/components/shared/form";
@@ -60,7 +61,7 @@ export function TransferDialog({ enrolment, batches, today }: { enrolment: { id:
       <DialogContent>
         <DialogHeader><DialogTitle>Transfer from {enrolment.batchName}</DialogTitle><DialogDescription>The old enrolment is closed the day before the transfer date. Past attendance and fees are not changed.</DialogDescription></DialogHeader>
         <div className="space-y-1.5"><Label htmlFor="tb">New batch</Label><select id="tb" className={selectClass} value={to} onChange={(e) => setTo(e.target.value)}><option value="">Select batch</option>{batches.map((b) => <option key={b.id} value={b.id}>{b.name}{b.full ? " (full)" : ""}</option>)}</select></div>
-        <div className="space-y-1.5"><Label htmlFor="td">Transfer date</Label><Input id="td" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        <div className="space-y-1.5"><Label htmlFor="td">Transfer date</Label><DateInput id="td" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <div className="space-y-1.5"><Label htmlFor="tr">Reason</Label><Textarea id="tr" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} /></div>
         {full && <div className="space-y-1.5"><Label htmlFor="to">Capacity override reason</Label><Textarea id="to" rows={2} value={override} onChange={(e) => setOverride(e.target.value)} /></div>}
         {error && <p className="text-sm text-destructive">{error}</p>}

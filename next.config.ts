@@ -6,7 +6,17 @@ const nextConfig: NextConfig = {
   cacheComponents: false,
   poweredByHeader: false,
   experimental: {
-    serverActions: { bodySizeLimit: "26mb" }, // file uploads (limit also enforced per setting)
+    serverActions: {
+      bodySizeLimit: "26mb",
+      allowedOrigins: [
+        "localhost:3100",
+        "127.0.0.1:3100",
+        "localhost:3000",
+        "127.0.0.1:3000",
+        "*.localhost:3100",
+        "*.localhost:3000",
+      ],
+    },
   },
   async headers() {
     return [

@@ -26,8 +26,8 @@ export default async function ParentAttendancePage() {
         description="Monitor daily attendance and punctuality for your children."
       />
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <StatCard label="Overall Attendance" value={`${percentage}%`} icon={Percent} />
+      <div className="grid grid-cols-2 gap-3 mb-6 sm:grid-cols-3 sm:gap-4">
+        <div className="col-span-2 sm:col-span-1"><StatCard label="Overall Attendance" value={`${percentage}%`} icon={Percent} /></div>
         <StatCard label="Total Present" value={present} tone="success" icon={CheckCircle} />
         <StatCard label="Total Absent" value={absent} tone="danger" icon={XCircle} />
       </div>

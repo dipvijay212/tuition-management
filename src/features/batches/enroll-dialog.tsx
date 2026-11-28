@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { enrollStudents, searchEnrollableStudents } from "./actions";
@@ -61,7 +62,7 @@ export function EnrollDialog({ batchId, today, seatsLeft }: { batchId: string; t
             ))}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5"><Label htmlFor="enroll-date">Start date</Label><Input id="enroll-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          <div className="min-w-0 space-y-1.5"><Label htmlFor="enroll-date">Start date</Label><DateInput id="enroll-date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
           <div className="flex items-end text-sm text-muted-foreground">{selected.size} selected</div>
         </div>
         {overCapacity && (

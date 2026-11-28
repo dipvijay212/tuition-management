@@ -10,7 +10,7 @@ export default function RegisterPage() {
       <div className="space-y-2">
         <h2 className="text-2xl font-semibold tracking-tight">Register your institute</h2>
         <p className="text-sm text-muted-foreground">
-          Create an institute and an admin account to start managing classes, batches, students, and fees.
+          Create your institute and admin account. Every new institute gets a free trial with all features, no card needed.
         </p>
       </div>
       <SetupForm />

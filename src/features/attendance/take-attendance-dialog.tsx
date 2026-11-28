@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Field, NativeSelect } from "@/components/shared/form";
 import { formatDate } from "@/lib/utilities/format";
 import { cn } from "@/lib/utils";
@@ -229,11 +230,10 @@ export function TakeAttendanceDialog({
               <>
                 <span className="font-medium text-foreground">Date:</span>
                 {!initialSessionId ? (
-                  <Input
-                    type="date"
+                  <DateInput
                     value={sessionDate}
                     onChange={(e) => handleDateChange(e.target.value)}
-                    className="h-7 w-36 text-xs font-semibold py-0 px-2"
+                    className="h-7 w-40"
                     disabled={loading || saving}
                   />
                 ) : (
@@ -272,10 +272,9 @@ export function TakeAttendanceDialog({
             </Field>
 
             <Field label="Attendance Date" name="session_date" required>
-              <Input
+              <DateInput
                 id="session_date"
                 name="session_date"
-                type="date"
                 value={sessionDate}
                 onChange={(e) => setSessionDate(e.target.value)}
                 required
@@ -315,7 +314,7 @@ export function TakeAttendanceDialog({
               <p className="text-sm font-medium">Loading {currentBatchName} students...</p>
             </div>
           ) : (
-            <div className="flex flex-col flex-1 overflow-hidden space-y-4">
+            <div className="flex min-h-0 flex-col flex-1 overflow-hidden space-y-4">
               {sessionData.isAlreadyMarked && (
                 <div className="rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400">
                   Editing existing attendance records. Updates will be saved directly.
@@ -380,7 +379,7 @@ export function TakeAttendanceDialog({
                   No students match &quot;{searchQuery}&quot;.
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[200px] max-h-[50vh]">
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[7rem] sm:min-h-[200px] max-h-[50vh]">
                   {filteredStudents.map((st) => {
                     const currentStatus = roster[st.id]?.status ?? "present";
                     const isPresent = currentStatus === "present" || currentStatus === "late";
@@ -394,37 +393,37 @@ export function TakeAttendanceDialog({
                           isAbsent ? "border-destructive/30 bg-destructive/5" : "bg-card"
                         )}
                       >
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <div className="font-medium text-foreground">{st.full_name}</div>
-                          <div className="text-xs text-muted-foreground">Adm: {st.admission_no}</div>
+                          <div className="truncate text-xs text-muted-foreground">Adm: {st.admission_no}</div>
                         </div>
 
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex shrink-0 items-center gap-1.5">
                           <Button
                             type="button"
                             size="sm"
                             variant={isPresent ? "default" : "outline"}
                             className={cn(
-                              "h-8 px-3 text-xs font-semibold",
+                              "h-8 px-2.5 text-xs font-semibold sm:px-3",
                               isPresent
                                 ? "bg-emerald-600 text-white hover:bg-emerald-700"
                                 : "text-muted-foreground hover:text-foreground"
                             )}
                             onClick={() => setStudentStatus(st.id, "present")}
                           >
-                            <Check className="size-3.5 mr-1" /> Present
+                            <Check className="hidden size-3.5 mr-1 sm:inline" /> Present
                           </Button>
                           <Button
                             type="button"
                             size="sm"
                             variant={isAbsent ? "destructive" : "outline"}
                             className={cn(
-                              "h-8 px-3 text-xs font-semibold",
+                              "h-8 px-2.5 text-xs font-semibold sm:px-3",
                               !isAbsent && "text-muted-foreground hover:text-destructive"
                             )}
                             onClick={() => setStudentStatus(st.id, "absent")}
                           >
-                            <X className="size-3.5 mr-1" /> Absent
+                            <X className="hidden size-3.5 mr-1 sm:inline" /> Absent
                           </Button>
                         </div>
                       </div>

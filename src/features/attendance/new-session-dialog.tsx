@@ -4,6 +4,7 @@ import { CheckCircle2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { ActionForm, Field, NativeSelect } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
 import { createAdhocSessionAction } from "./actions";
@@ -53,7 +54,7 @@ export function NewSessionDialog({ batches, teachers, subjects, defaultDate, def
               </div>
 
               <Field label="Date" name="session_date" required error={errors.session_date}>
-                <Input id="session_date" name="session_date" type="date" defaultValue={defaultDate} required />
+                <DateInput id="session_date" name="session_date" defaultValue={defaultDate} required />
               </Field>
 
               <div className="grid grid-cols-2 gap-3">

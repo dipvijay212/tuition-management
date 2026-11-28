@@ -66,8 +66,8 @@ export function MarksEntryTable({
             <input type="hidden" name="examination_subject_id" value={examSubjectId} />
             <input type="hidden" name="marks_json" value={payload} />
 
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="scroll-shadow-x rounded-xl border bg-card overflow-x-auto">
+              <table className="w-full min-w-[38rem] text-sm">
                 <thead>
                   <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase">
                     <th className="py-2.5 px-4 font-medium">Student</th>
@@ -81,9 +81,9 @@ export function MarksEntryTable({
                     const cur = entries[s.id] ?? { marks: "", absent: false, remarks: "" };
                     return (
                       <tr key={s.id} className="hover:bg-muted/20">
-                        <td className="py-2 px-4">
+                        <td className="py-2 px-4 min-w-[10rem]">
                           <div className="font-medium text-foreground">{s.full_name}</div>
-                          <div className="text-xs text-muted-foreground">Adm: {s.admission_no}</div>
+                          <div className="text-xs text-muted-foreground whitespace-nowrap">Adm: {s.admission_no}</div>
                         </td>
                         <td className="py-2 px-4">
                           <Input
@@ -112,7 +112,7 @@ export function MarksEntryTable({
                             placeholder="Remarks..."
                             value={cur.remarks}
                             onChange={(e) => updateEntry(s.id, { remarks: e.target.value })}
-                            className="h-8"
+                            className="h-8 min-w-[9rem]"
                           />
                         </td>
                       </tr>

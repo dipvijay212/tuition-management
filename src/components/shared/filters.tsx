@@ -4,6 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { DateInput } from "@/components/ui/date-input";
 
 function useParamSetter() {
   const router = useRouter();
@@ -53,10 +54,10 @@ export function SelectFilter({ param, options, allLabel = "All", label }: { para
 export function DateFilter({ param, label }: { param: string; label: string }) {
   const { set, sp } = useParamSetter();
   return (
-    <label className="flex h-10 items-center gap-2 rounded-lg border border-input bg-background px-3 text-sm">
+    <div className="flex items-center gap-2 text-sm">
       <span className="text-muted-foreground">{label}</span>
-      <input type="date" value={sp.get(param) ?? ""} onChange={(e) => set({ [param]: e.target.value || null })} className="bg-transparent outline-none" />
-    </label>
+      <DateInput aria-label={label} value={sp.get(param) ?? ""} onChange={(e) => set({ [param]: e.target.value || null })} className="h-10 w-40 bg-background" />
+    </div>
   );
 }
 

@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionForm, Field, NativeSelect } from "@/components/shared/form";
 import { SubmitButton } from "@/components/shared/submit-button";
@@ -21,7 +22,7 @@ export function StudentEditForm({ s, classes, subjects, guardians }: { s: Tables
             <CardContent className="grid gap-4 md:grid-cols-2">
               <input type="hidden" name="id" value={s.id} />
               <Field label="Full name" name="full_name" required error={errors.full_name} className="md:col-span-2"><Input id="full_name" name="full_name" defaultValue={s.full_name} /></Field>
-              <Field label="Date of birth" name="date_of_birth"><Input id="date_of_birth" name="date_of_birth" type="date" defaultValue={s.date_of_birth ?? ""} /></Field>
+              <Field label="Date of birth" name="date_of_birth"><DateInput id="date_of_birth" name="date_of_birth" defaultValue={s.date_of_birth ?? ""} /></Field>
               <Field label="Gender" name="gender"><NativeSelect id="gender" name="gender" defaultValue={s.gender ?? ""}><option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></NativeSelect></Field>
               <Field label="Mobile" name="phone" error={errors.phone}><Input id="phone" name="phone" defaultValue={s.phone ?? ""} /></Field>
               <Field label="Email" name="email" error={errors.email}><Input id="email" name="email" type="email" defaultValue={s.email ?? ""} /></Field>

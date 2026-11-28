@@ -23,6 +23,10 @@ export default function ForgotPasswordPage() {
           <Label htmlFor="identifier">Email or mobile number</Label>
           <Input id="identifier" name="identifier" required className="h-11" />
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="institute_code">Institute code <span className="font-normal text-muted-foreground">(needed for mobile number)</span></Label>
+          <Input id="institute_code" name="institute_code" autoCapitalize="characters" spellCheck={false} maxLength={14} className="h-11 font-mono tracking-wider uppercase" />
+        </div>
         <SubmitButton className="h-11 w-full" pendingText="Sending…">Send reset link</SubmitButton>
       </form>
     </div>
