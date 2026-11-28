@@ -247,7 +247,7 @@ export function TakeAttendanceView({
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search student by name or admission number..."
+              placeholder="Search by name or admission no..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="h-9 pl-9 text-sm"
@@ -285,29 +285,31 @@ export function TakeAttendanceView({
               <div
                 key={st.id}
                 className={cn(
-                  "flex items-center justify-between gap-3 px-4 py-3 transition-colors",
+                  "flex flex-col gap-2.5 px-4 py-3 transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-3",
                   isAbsent ? "bg-destructive/5" : "hover:bg-muted/30",
                 )}
               >
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <span className="w-7 shrink-0 text-right font-mono text-xs text-muted-foreground tabular-nums">
+                <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:items-center sm:gap-3">
+                  <span className="w-6 shrink-0 pt-0.5 text-right font-mono text-xs text-muted-foreground tabular-nums sm:w-7 sm:pt-0">
                     {idx + 1}.
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium text-foreground">{st.full_name}</div>
-                    <div className="truncate text-xs text-muted-foreground">
+                    <div className="font-medium leading-snug text-foreground break-words sm:truncate">
+                      {st.full_name}
+                    </div>
+                    <div className="text-xs text-muted-foreground break-all sm:truncate">
                       Adm: {st.admission_no}
                     </div>
                   </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="grid grid-cols-2 gap-2 pl-8 sm:flex sm:shrink-0 sm:items-center sm:pl-0">
                   <Button
                     type="button"
                     size="sm"
                     variant={isPresent ? "default" : "outline"}
                     className={cn(
-                      "h-8 px-3 text-xs font-semibold sm:min-w-24",
+                      "h-9 w-full px-3 text-xs font-semibold sm:h-8 sm:w-auto sm:min-w-24",
                       isPresent
                         ? "bg-emerald-600 text-white hover:bg-emerald-700"
                         : "text-muted-foreground hover:text-foreground",
@@ -322,7 +324,7 @@ export function TakeAttendanceView({
                     size="sm"
                     variant={isAbsent ? "destructive" : "outline"}
                     className={cn(
-                      "h-8 px-3 text-xs font-semibold sm:min-w-24",
+                      "h-9 w-full px-3 text-xs font-semibold sm:h-8 sm:w-auto sm:min-w-24",
                       !isAbsent && "text-muted-foreground hover:text-destructive",
                     )}
                     onClick={() => setStudentStatus(st.id, "absent")}
@@ -351,10 +353,11 @@ export function TakeAttendanceView({
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <Button
             type="button"
             variant="outline"
+            className="flex-1 sm:flex-initial"
             nativeButton={false}
             render={<Link href={backHref} />}
             disabled={saving}
@@ -365,7 +368,7 @@ export function TakeAttendanceView({
             type="button"
             onClick={handleSaveAttendance}
             disabled={saving || loadingDate || totalStudents === 0}
-            className="px-6 font-semibold"
+            className="flex-2 px-6 font-semibold sm:flex-initial"
           >
             {saving ? (
               <Loader2 className="mr-2 size-4 animate-spin" />
